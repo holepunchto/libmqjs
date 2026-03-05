@@ -1,0 +1,28 @@
+diff --git a/mquickjs.c b/mquickjs.c
+index 5127995..8d5101e 100644
+--- a/mquickjs.c
++++ b/mquickjs.c
+@@ -2113,6 +2113,11 @@ const char *JS_ToCString(JSContext *ctx, JSValue val, JSCStringBuf *buf)
+     return JS_ToCStringLen(ctx, NULL, val, buf);
+ }
+ 
++int JS_HasException(JSContext *ctx)
++{
++  return ctx->current_exception != JS_UNINITIALIZED;
++}
++
+ JSValue JS_GetException(JSContext *ctx)
+ {
+     JSValue obj;
+diff --git a/mquickjs.h b/mquickjs.h
+index a1557fe..0b359fa 100644
+--- a/mquickjs.h
++++ b/mquickjs.h
+@@ -310,6 +310,7 @@ int JS_ToUint32(JSContext *ctx, uint32_t *pres, JSValue val);
+ int JS_ToInt32Sat(JSContext *ctx, int *pres, JSValue val);
+ int JS_ToNumber(JSContext *ctx, double *pres, JSValue val);
+ 
++int JS_HasException(JSContext *ctx);
+ JSValue JS_GetException(JSContext *ctx);
+ int JS_StackCheck(JSContext *ctx, uint32_t len);
+ void JS_PushArg(JSContext *ctx, JSValue val);

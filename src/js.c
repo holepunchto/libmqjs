@@ -630,7 +630,7 @@ js_exit_context(js_env_t *env, js_context_t *context) {
 
 int
 js_get_bindings(js_env_t *env, js_value_t **result) {
-  // if (JS_HasException(env->context)) return js__error(env);
+  if (JS_HasException(env->context)) return js__error(env);
 
   js_value_t *wrapper = malloc(sizeof(js_value_t));
 
@@ -647,7 +647,7 @@ js_get_bindings(js_env_t *env, js_value_t **result) {
 
 int
 js_run_script(js_env_t *env, const char *file, size_t len, int offset, js_value_t *source, js_value_t **result) {
-  // if (JS_HasException(env->context)) return js__error(env);
+  if (JS_HasException(env->context)) return js__error(env);
 
   size_t str_len;
   JSCStringBuf buf;
@@ -1002,7 +1002,7 @@ js_create_bigint_uint64(js_env_t *env, uint64_t value, js_value_t **result) {
 
 int
 js_create_string_utf8(js_env_t *env, const utf8_t *str, size_t len, js_value_t **result) {
-  // if (JS_HasException(env->context)) return js__error(env);
+  if (JS_HasException(env->context)) return js__error(env);
 
   JSValue value;
 
@@ -1037,7 +1037,7 @@ js_create_string_utf8(js_env_t *env, const utf8_t *str, size_t len, js_value_t *
 
 int
 js_create_string_utf16le(js_env_t *env, const utf16_t *str, size_t len, js_value_t **result) {
-  // if (JS_HasException(env->context)) return js__error(env);
+  if (JS_HasException(env->context)) return js__error(env);
 
   if (len == (size_t) -1) len = wcslen((wchar_t *) str);
 
@@ -1076,7 +1076,7 @@ js_create_string_utf16le(js_env_t *env, const utf16_t *str, size_t len, js_value
 
 int
 js_create_string_latin1(js_env_t *env, const latin1_t *str, size_t len, js_value_t **result) {
-  // if (JS_HasException(env->context)) return js__error(env);
+  if (JS_HasException(env->context)) return js__error(env);
 
   if (len == (size_t) -1) len = strlen((char *) str);
 
@@ -1564,7 +1564,7 @@ js_coerce_to_number(js_env_t *env, js_value_t *value, js_value_t **result) {
 
 int
 js_coerce_to_string(js_env_t *env, js_value_t *value, js_value_t **result) {
-  // if (JS_HasException(env->context)) return js__error(env);
+  if (JS_HasException(env->context)) return js__error(env);
 
   JSValue string = JS_ToString(env->context, value->ref.val);
 
@@ -2338,7 +2338,7 @@ js_get_array_length(js_env_t *env, js_value_t *array, uint32_t *result) {
 
 int
 js_get_array_elements(js_env_t *env, js_value_t *array, js_value_t **elements, size_t len, size_t offset, uint32_t *result) {
-  // if (JS_HasException(env->context)) return js__error(env);
+  if (JS_HasException(env->context)) return js__error(env);
 
   int err;
 
@@ -2387,7 +2387,7 @@ js_get_array_elements(js_env_t *env, js_value_t *array, js_value_t **elements, s
 
 int
 js_set_array_elements(js_env_t *env, js_value_t *array, const js_value_t *elements[], size_t len, size_t offset) {
-  // if (JS_HasException(env->context)) return js__error(env);
+  if (JS_HasException(env->context)) return js__error(env);
 
   env->depth++;
 
@@ -2494,7 +2494,7 @@ js_delete_property(js_env_t *env, js_value_t *object, js_value_t *key, bool *res
 
 int
 js_get_named_property(js_env_t *env, js_value_t *object, const char *name, js_value_t **result) {
-  // if (JS_HasException(env->context)) return js__error(env);
+  if (JS_HasException(env->context)) return js__error(env);
 
   env->depth++;
 
@@ -2539,7 +2539,7 @@ js_has_named_property(js_env_t *env, js_value_t *object, const char *name, bool 
 
 int
 js_set_named_property(js_env_t *env, js_value_t *object, const char *name, js_value_t *value) {
-  // if (JS_HasException(env->context)) return js__error(env);
+  if (JS_HasException(env->context)) return js__error(env);
 
   env->depth++;
 
@@ -2572,7 +2572,7 @@ js_delete_named_property(js_env_t *env, js_value_t *object, const char *name, bo
 
 int
 js_get_element(js_env_t *env, js_value_t *object, uint32_t index, js_value_t **result) {
-  // if (JS_HasException(env->context)) return js__error(env);
+  if (JS_HasException(env->context)) return js__error(env);
 
   env->depth++;
 
@@ -2617,7 +2617,7 @@ js_has_element(js_env_t *env, js_value_t *object, uint32_t index, bool *result) 
 
 int
 js_set_element(js_env_t *env, js_value_t *object, uint32_t index, js_value_t *value) {
-  // if (JS_HasException(env->context)) return js__error(env);
+  if (JS_HasException(env->context)) return js__error(env);
 
   env->depth++;
 
@@ -3045,7 +3045,7 @@ js__on_threadsafe_function_async(uv_async_t *handle) {
 
 int
 js_create_threadsafe_function(js_env_t *env, js_value_t *function, size_t queue_limit, size_t initial_thread_count, js_finalize_cb finalize_cb, void *finalize_hint, void *context, js_threadsafe_function_cb cb, js_threadsafe_function_t **result) {
-  // if (JS_HasException(env->context)) return js__error(env);
+  if (JS_HasException(env->context)) return js__error(env);
 
   int err;
 
@@ -3196,7 +3196,7 @@ js_unref_threadsafe_function(js_env_t *env, js_threadsafe_function_t *function) 
 
 int
 js_add_teardown_callback(js_env_t *env, js_teardown_cb callback, void *data) {
-  // if (JS_HasException(env->context)) return js__error(env);
+  if (JS_HasException(env->context)) return js__error(env);
 
   js_teardown_task_t *task = malloc(sizeof(js_teardown_task_t));
 
@@ -3211,7 +3211,7 @@ js_add_teardown_callback(js_env_t *env, js_teardown_cb callback, void *data) {
 
 int
 js_remove_teardown_callback(js_env_t *env, js_teardown_cb callback, void *data) {
-  // if (JS_HasException(env->context)) return js__error(env);
+  if (JS_HasException(env->context)) return js__error(env);
 
   if (env->destroying) return 0;
 
@@ -3232,7 +3232,7 @@ js_remove_teardown_callback(js_env_t *env, js_teardown_cb callback, void *data) 
 
 int
 js_add_deferred_teardown_callback(js_env_t *env, js_deferred_teardown_cb callback, void *data, js_deferred_teardown_t **result) {
-  // if (JS_HasException(env->context)) return js__error(env);
+  if (JS_HasException(env->context)) return js__error(env);
 
   js_teardown_task_t *task = malloc(sizeof(js_teardown_task_t));
 
@@ -3280,7 +3280,7 @@ js_finish_deferred_teardown_callback(js_deferred_teardown_t *handle) {
 
 int
 js_throw(js_env_t *env, js_value_t *error) {
-  // if (JS_HasException(env->context)) return js__error(env);
+  if (JS_HasException(env->context)) return js__error(env);
 
   JS_Throw(env->context, error->ref.val);
 
@@ -3317,7 +3317,7 @@ js_throw_error(js_env_t *env, const char *code, const char *message) {
 
 int
 js_throw_verrorf(js_env_t *env, const char *code, const char *message, va_list args) {
-  // if (JS_HasException(env->context)) return js__error(env);
+  if (JS_HasException(env->context)) return js__error(env);
 
   int err;
 
@@ -3335,7 +3335,7 @@ js_throw_verrorf(js_env_t *env, const char *code, const char *message, va_list a
 
 int
 js_throw_errorf(js_env_t *env, const char *code, const char *message, ...) {
-  // if (JS_HasException(env->context)) return js__error(env);
+  if (JS_HasException(env->context)) return js__error(env);
 
   int err;
 
@@ -3361,7 +3361,7 @@ js_throw_type_error(js_env_t *env, const char *code, const char *message) {
 
 int
 js_throw_type_verrorf(js_env_t *env, const char *code, const char *message, va_list args) {
-  // if (JS_HasException(env->context)) return js__error(env);
+  if (JS_HasException(env->context)) return js__error(env);
 
   int err;
 
@@ -3379,7 +3379,7 @@ js_throw_type_verrorf(js_env_t *env, const char *code, const char *message, va_l
 
 int
 js_throw_type_errorf(js_env_t *env, const char *code, const char *message, ...) {
-  // if (JS_HasException(env->context)) return js__error(env);
+  if (JS_HasException(env->context)) return js__error(env);
 
   int err;
 
@@ -3405,7 +3405,7 @@ js_throw_range_error(js_env_t *env, const char *code, const char *message) {
 
 int
 js_throw_range_verrorf(js_env_t *env, const char *code, const char *message, va_list args) {
-  // if (JS_HasException(env->context)) return js__error(env);
+  if (JS_HasException(env->context)) return js__error(env);
 
   int err;
 
@@ -3423,7 +3423,7 @@ js_throw_range_verrorf(js_env_t *env, const char *code, const char *message, va_
 
 int
 js_throw_range_errorf(js_env_t *env, const char *code, const char *message, ...) {
-  // if (JS_HasException(env->context)) return js__error(env);
+  if (JS_HasException(env->context)) return js__error(env);
 
   int err;
 
@@ -3449,7 +3449,7 @@ js_throw_syntax_error(js_env_t *env, const char *code, const char *message) {
 
 int
 js_throw_syntax_verrorf(js_env_t *env, const char *code, const char *message, va_list args) {
-  // if (JS_HasException(env->context)) return js__error(env);
+  if (JS_HasException(env->context)) return js__error(env);
 
   int err;
 
@@ -3467,7 +3467,7 @@ js_throw_syntax_verrorf(js_env_t *env, const char *code, const char *message, va
 
 int
 js_throw_syntax_errorf(js_env_t *env, const char *code, const char *message, ...) {
-  // if (JS_HasException(env->context)) return js__error(env);
+  if (JS_HasException(env->context)) return js__error(env);
 
   int err;
 
@@ -3493,7 +3493,7 @@ js_throw_reference_error(js_env_t *env, const char *code, const char *message) {
 
 int
 js_throw_reference_verrorf(js_env_t *env, const char *code, const char *message, va_list args) {
-  // if (JS_HasException(env->context)) return js__error(env);
+  if (JS_HasException(env->context)) return js__error(env);
 
   int err;
 
@@ -3511,7 +3511,7 @@ js_throw_reference_verrorf(js_env_t *env, const char *code, const char *message,
 
 int
 js_throw_reference_errorf(js_env_t *env, const char *code, const char *message, ...) {
-  // if (JS_HasException(env->context)) return js__error(env);
+  if (JS_HasException(env->context)) return js__error(env);
 
   int err;
 
