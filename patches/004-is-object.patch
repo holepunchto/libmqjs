@@ -1,0 +1,25 @@
+diff --git a/mquickjs.c b/mquickjs.c
+index eb40b17..9b39047 100644
+--- a/mquickjs.c
++++ b/mquickjs.c
+@@ -1093,7 +1093,7 @@ static BOOL JS_IsPrimitive(JSContext *ctx, JSValue val)
+ }
+ 
+ /* Note: short functions are not considered as objects by this function */
+-static BOOL JS_IsObject(JSContext *ctx, JSValue val)
++BOOL JS_IsObject(JSContext *ctx, JSValue val)
+ {
+     if (!JS_IsPtr(val)) {
+         return FALSE;
+diff --git a/mquickjs.h b/mquickjs.h
+index c3c0eee..d7726d2 100644
+--- a/mquickjs.h
++++ b/mquickjs.h
+@@ -206,6 +206,7 @@ static inline JSValue JS_NewBool(int val)
+ JS_BOOL JS_IsNumber(JSContext *ctx, JSValue val);
+ JS_BOOL JS_IsString(JSContext *ctx, JSValue val);
+ JS_BOOL JS_IsError(JSContext *ctx, JSValue val);
++JS_BOOL JS_IsObject(JSContext *ctx, JSValue val);
+ JS_BOOL JS_IsFunction(JSContext *ctx, JSValue val);
+ 
+ int JS_GetClassID(JSContext *ctx, JSValue val);

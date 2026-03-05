@@ -1720,7 +1720,7 @@ int
 js_is_object(js_env_t *env, js_value_t *value, bool *result) {
   // Allow continuing even with a pending exception
 
-  *result = false;
+  *result = JS_IsObject(env->context, value->ref.val);
 
   return 0;
 }
@@ -1935,8 +1935,6 @@ js_is_arraybuffer(js_env_t *env, js_value_t *value, bool *result) {
 int
 js_is_detached_arraybuffer(js_env_t *env, js_value_t *value, bool *result) {
   // Allow continuing even with a pending exception
-
-  size_t len;
 
   *result = false;
 
