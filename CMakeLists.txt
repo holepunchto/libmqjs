@@ -4,7 +4,12 @@ find_package(cmake-fetch REQUIRED PATHS node_modules/cmake-fetch)
 
 project(js C)
 
-fetch_package("github:bellard/mquickjs" SOURCE_DIR mqjs)
+fetch_package(
+  "github:bellard/mquickjs"
+  SOURCE_DIR mqjs
+  PATCHES
+    patches/001-remove-unused-headers.patch
+)
 
 set(MQJS_BUILD_ATOMS OFF CACHE BOOL "Build the standard library atoms for ROM")
 

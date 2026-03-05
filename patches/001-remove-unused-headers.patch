@@ -1,0 +1,14 @@
+diff --git a/dtoa.c b/dtoa.c
+index 604f3f0..602a74a 100644
+--- a/dtoa.c
++++ b/dtoa.c
+@@ -28,9 +28,7 @@
+ #include <string.h>
+ #include <assert.h>
+ #include <ctype.h>
+-#include <sys/time.h>
+ #include <math.h>
+-#include <setjmp.h>
+ 
+ #include "cutils.h"
+ #include "dtoa.h"
