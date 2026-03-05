@@ -1603,6 +1603,8 @@ js_typeof(js_env_t *env, js_value_t *value, js_value_type_t *result) {
     *result = js_string;
   } else if (JS_IsFunction(env->context, value->ref.val)) {
     *result = js_function;
+  } else if (JS_IsObject(env->context, value->ref.val)) {
+    *result = js_object;
   } else if (JS_IsBool(value->ref.val)) {
     *result = js_boolean;
   } else if (JS_IsUndefined(value->ref.val)) {
