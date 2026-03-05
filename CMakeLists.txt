@@ -62,9 +62,15 @@ else()
   )
 endif()
 
+if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+  set(mqjs_build_width 64)
+elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
+  set(mqjs_build_width 32)
+endif()
+
 add_custom_command(
   OUTPUT ${mqjs}/mquickjs_atom.h
-  COMMAND ${mqjs_build} -a > ${mqjs}/mquickjs_atom.h
+  COMMAND ${mqjs_build} -m${mqjs_build_width} -a > ${mqjs}/mquickjs_atom.h
   CODEGEN
 )
 
@@ -100,7 +106,7 @@ fetch_package("github:holepunchto/libintrusive")
 
 add_custom_command(
   OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/src/atoms.h
-  COMMAND ${mqjs_build} > ${CMAKE_CURRENT_SOURCE_DIR}/src/atoms.h
+  COMMAND ${mqjs_build} -m${mqjs_build_width} > ${CMAKE_CURRENT_SOURCE_DIR}/src/atoms.h
   CODEGEN
 )
 
