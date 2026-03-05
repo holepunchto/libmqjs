@@ -6,51 +6,65 @@ project(js C)
 
 fetch_package("github:bellard/mquickjs" SOURCE_DIR mqjs)
 
-add_library(mqjs_stdlib OBJECT)
+set(MQJS_BUILD_ATOMS OFF CACHE BOOL "Build the standard library atoms for ROM")
 
-set_target_properties(
-  mqjs_stdlib
-  PROPERTIES
-  C_STANDARD 11
-  POSITION_INDEPENDENT_CODE ON
-)
+if(MQJS_BUILD_ATOMS)
+  add_library(mqjs_stdlib OBJECT)
 
-target_sources(
-  mqjs_stdlib
-  PRIVATE
-    src/atoms.c
-)
-
-target_include_directories(
-  mqjs_stdlib
-  PUBLIC
-    ${mqjs}
-)
-
-add_executable(mqjs_build)
-
-set_target_properties(
-  mqjs_build
-  PROPERTIES
-  C_STANDARD 11
-  POSITION_INDEPENDENT_CODE ON
-)
-
-target_sources(
-  mqjs_build
-  PRIVATE
-    ${mqjs}/mquickjs_build.c
-)
-
-target_link_libraries(
-  mqjs_build
-  PRIVATE
+  set_target_properties(
     mqjs_stdlib
-)
+    PROPERTIES
+    C_STANDARD 11
+    POSITION_INDEPENDENT_CODE ON
+  )
+
+  target_sources(
+    mqjs_stdlib
+    PRIVATE
+      src/atoms.c
+  )
+
+  target_include_directories(
+    mqjs_stdlib
+    PUBLIC
+      ${mqjs}
+  )
+
+  add_executable(mqjs_build)
+
+  set_target_properties(
+    mqjs_build
+    PROPERTIES
+    C_STANDARD 11
+    POSITION_INDEPENDENT_CODE ON
+    OUTPUT_NAME mqjs-build
+  )
+
+  target_sources(
+    mqjs_build
+    PRIVATE
+      ${mqjs}/mquickjs_build.c
+  )
+
+  target_link_libraries(
+    mqjs_build
+    PRIVATE
+      mqjs_stdlib
+  )
+
+  set(mqjs_build $<TARGET_FILE:mqjs_build>)
+else()
+  find_program(
+    mqjs_build
+    NAMES mqjs-build
+    PATHS build
+    REQUIRED
+  )
+endif()
 
 add_custom_command(
   OUTPUT ${mqjs}/mquickjs_atom.h
-  COMMAND $<TARGET_FILE:mqjs_build> -a > ${mqjs}/mquickjs_atom.h
+  COMMAND ${mqjs_build} -a > ${mqjs}/mquickjs_atom.h
   CODEGEN
 )
 
@@ -86,7 +100,7 @@ fetch_package("github:holepunchto/libintrusive")
 
 add_custom_command(
   OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/src/atoms.h
-  COMMAND $<TARGET_FILE:mqjs_build> > ${CMAKE_CURRENT_SOURCE_DIR}/src/atoms.h
+  COMMAND ${mqjs_build} > ${CMAKE_CURRENT_SOURCE_DIR}/src/atoms.h
   CODEGEN
 )
 

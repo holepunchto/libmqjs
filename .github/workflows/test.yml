@@ -65,7 +65,9 @@ jobs:
           node-version: lts/*
       - run: npm install -g bare-make
       - run: npm install
-      - run: bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} --debug ${{ matrix.flags }}
+      - run: bare-make generate --debug -D MQJS_BUILD_ATOMS=ON
+      - run: bare-make build --target mqjs_build
+      - run: bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} --debug --no-cache ${{ matrix.flags }}
       - run: bare-make build
       - run: bare-make test
         if: ${{ matrix.platform == 'linux' || matrix.platform == 'darwin' || (matrix.platform == 'win32' && matrix.arch == 'x64') }}
