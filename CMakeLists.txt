@@ -9,8 +9,8 @@ fetch_package(
   SOURCE_DIR mqjs
   PATCHES
     patches/001-remove-unused-headers.patch
-    patches/002-exception-uninitialized.patch
-    patches/003-has-exception.patch
+    patches/002-has-exception.patch
+    patches/003-exception-uninitialized.patch
 )
 
 set(MQJS_BUILD_ATOMS OFF CACHE BOOL "Build the standard library atoms for ROM")
