@@ -1065,6 +1065,16 @@ js_create_bigint_uint64(js_env_t *env, uint64_t value, js_value_t **result) {
 }
 
 int
+js_create_bigint_words(js_env_t *env, int sign, const uint64_t *words, size_t len, js_value_t **result) {
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
+
+  return js__error(env);
+}
+
+int
 js_create_string_utf8(js_env_t *env, const utf8_t *str, size_t len, js_value_t **result) {
   if (JS_HasException(env->context)) return js__error(env);
 
@@ -2388,6 +2398,16 @@ js_get_value_bigint_int64(js_env_t *env, js_value_t *value, int64_t *result, boo
 
 int
 js_get_value_bigint_uint64(js_env_t *env, js_value_t *value, uint64_t *result, bool *lossless) {
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
+
+  return js__error(env);
+}
+
+int
+js_get_value_bigint_words(js_env_t *env, js_value_t *value, int *sign, uint64_t *words, size_t len, size_t *result) {
   int err;
 
   err = js_throw_error(env, NULL, "Unsupported operation");
