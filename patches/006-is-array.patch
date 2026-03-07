@@ -1,0 +1,33 @@
+diff --git a/mquickjs.c b/mquickjs.c
+index 76b1536..d67ae4d 100644
+--- a/mquickjs.c
++++ b/mquickjs.c
+@@ -1150,6 +1150,16 @@ static JSObject *js_get_object_class(JSContext *ctx, JSValue val, int class_id)
+     }
+ }
+ 
++BOOL JS_IsArray(JSContext *ctx, JSValue val)
++{
++    if (!JS_IsPtr(val)) {
++        return FALSE;
++    } else {
++        JSObject *p = JS_VALUE_TO_PTR(val);
++        return (p->mtag == JS_MTAG_OBJECT && p->class_id == JS_CLASS_ARRAY);
++    }
++}
++
+ BOOL JS_IsFunction(JSContext *ctx, JSValue val)
+ {
+     if (!JS_IsPtr(val)) {
+diff --git a/mquickjs.h b/mquickjs.h
+index 44b39fc..3cbb2d1 100644
+--- a/mquickjs.h
++++ b/mquickjs.h
+@@ -207,6 +207,7 @@ JS_BOOL JS_IsNumber(JSContext *ctx, JSValue val);
+ JS_BOOL JS_IsString(JSContext *ctx, JSValue val);
+ JS_BOOL JS_IsError(JSContext *ctx, JSValue val);
+ JS_BOOL JS_IsObject(JSContext *ctx, JSValue val);
++JS_BOOL JS_IsArray(JSContext *ctx, JSValue val);
+ JS_BOOL JS_IsFunction(JSContext *ctx, JSValue val);
+ 
+ int JS_GetClassID(JSContext *ctx, JSValue val);

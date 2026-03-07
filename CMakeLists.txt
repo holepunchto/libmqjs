@@ -13,6 +13,7 @@ fetch_package(
     patches/003-exception-uninitialized.patch
     patches/004-is-object.patch
     patches/005-get-context-opaque.patch
+    patches/006-is-array.patch
 )
 
 set(MQJS_BUILD_ATOMS OFF CACHE BOOL "Build the standard library atoms for ROM")

@@ -262,18 +262,9 @@ list(APPEND skipped_tests
   create-external-arraybuffer-with-finalizer-detach
   create-function-with-finalizer
   create-function-with-source
-  create-reference-array
   create-reference-bigint
-  create-reference-boolean
-  create-reference-function
-  create-reference-null
-  create-reference-number
-  create-reference-object
-  create-reference-object-multiple
   create-reference-object-weak
-  create-reference-string
   create-reference-symbol
-  create-reference-undefined
   create-uint8array
   create-unsafe-arraybuffer
   define-class

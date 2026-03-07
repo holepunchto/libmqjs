@@ -141,8 +141,7 @@ struct js_context_s {
 };
 
 struct js_ref_s {
-  JSValue value;
-  JSValue symbol;
+  JSGCRef ref;
   uint32_t count;
   bool finalized;
 };
@@ -780,54 +779,111 @@ js_run_module(js_env_t *env, js_module_t *module, js_value_t **result) {
   return js__error(env);
 }
 
+static void
+js__on_reference_finalize(js_env_t *env, void *data, void *finalize_hint) {
+  js_ref_t *reference = (js_ref_t *) data;
+
+  reference->ref.val = JS_NULL;
+  reference->count = 0;
+  reference->finalized = true;
+}
+
+static inline void
+js__set_weak_reference(js_env_t *env, js_ref_t *reference) {
+  if (reference->finalized) return;
+
+  if (JS_IsObject(env->context, reference->ref.val)) {
+    // TODO
+  }
+}
+
+static inline void
+js__clear_weak_reference(js_env_t *env, js_ref_t *reference) {
+  if (reference->finalized) return;
+
+  if (JS_IsObject(env->context, reference->ref.val)) {
+    // TODO
+  }
+}
+
 int
 js_create_reference(js_env_t *env, js_value_t *value, uint32_t count, js_ref_t **result) {
-  int err;
+  // Allow continuing even with a pending exception
 
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_ref_t *reference = malloc(sizeof(js_ref_t));
 
-  return js__error(env);
+  JS_AddGCRef(env->context, &reference->ref);
+
+  reference->ref.val = value->ref.val;
+  reference->count = count;
+  reference->finalized = false;
+
+  if (reference->count == 0) js__set_weak_reference(env, reference);
+
+  *result = reference;
+
+  return 0;
 }
 
 int
 js_delete_reference(js_env_t *env, js_ref_t *reference) {
-  int err;
+  // Allow continuing even with a pending exception
 
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  if (reference->count == 0) js__clear_weak_reference(env, reference);
 
-  return js__error(env);
+  JS_DeleteGCRef(env->context, &reference->ref);
+
+  free(reference);
+
+  return 0;
 }
 
 int
 js_reference_ref(js_env_t *env, js_ref_t *reference, uint32_t *result) {
-  int err;
+  // Allow continuing even with a pending exception
 
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  reference->count++;
 
-  return js__error(env);
+  if (reference->count == 1) js__clear_weak_reference(env, reference);
+
+  if (result) *result = reference->count;
+
+  return 0;
 }
 
 int
 js_reference_unref(js_env_t *env, js_ref_t *reference, uint32_t *result) {
-  int err;
+  // Allow continuing even with a pending exception
 
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  if (reference->count > 0) {
+    reference->count--;
 
-  return js__error(env);
+    if (reference->count == 0) js__set_weak_reference(env, reference);
+  }
+
+  if (result) *result = reference->count;
+
+  return 0;
 }
 
 int
 js_get_reference_value(js_env_t *env, js_ref_t *reference, js_value_t **result) {
-  int err;
+  // Allow continuing even with a pending exception
 
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  if (reference->finalized) *result = NULL;
+  else {
+    js_value_t *wrapper = malloc(sizeof(js_value_t));
 
-  return js__error(env);
+    JS_PushGCRef(env->context, &wrapper->ref);
+
+    wrapper->ref.val = reference->ref.val;
+
+    *result = wrapper;
+
+    js__attach_to_handle_scope(env, env->scope, wrapper);
+  }
+
+  return 0;
 }
 
 int
@@ -1884,7 +1940,7 @@ int
 js_is_array(js_env_t *env, js_value_t *value, bool *result) {
   // Allow continuing even with a pending exception
 
-  *result = false;
+  *result = JS_IsArray(env->context, value->ref.val);
 
   return 0;
 }
