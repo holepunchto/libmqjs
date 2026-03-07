@@ -183,8 +183,7 @@ struct js_callback_info_s {
   js_callback_t *callback;
   int argc;
   JSValue *argv;
-  JSValue receiver;
-  JSValue new_target;
+  JSValue *receiver;
 };
 
 static const uint8_t js_threadsafe_function_idle = 0x0;
@@ -1225,8 +1224,7 @@ js_native_function_call(JSContext *context, JSValue *receiver, int argc, JSValue
     .callback = callback,
     .argc = argc,
     .argv = argv,
-    .receiver = JS_NULL,
-    .new_target = JS_NULL,
+    .receiver = receiver,
   };
 
   js_handle_scope_t *scope;
@@ -2824,7 +2822,7 @@ js_get_callback_info(js_env_t *env, const js_callback_info_t *info, size_t *argc
 
     JS_PushGCRef(env->context, &wrapper->ref);
 
-    wrapper->ref.val = info->receiver;
+    wrapper->ref.val = *info->receiver;
 
     *receiver = wrapper;
 
@@ -2853,7 +2851,7 @@ js_get_new_target(js_env_t *env, const js_callback_info_t *info, js_value_t **re
 
   JS_PushGCRef(env->context, &wrapper->ref);
 
-  wrapper->ref.val = info->new_target;
+  wrapper->ref.val = JS_NULL;
 
   *result = wrapper;
 
