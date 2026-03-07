@@ -261,7 +261,6 @@ list(APPEND skipped_tests
   create-external-arraybuffer-with-finalizer
   create-external-arraybuffer-with-finalizer-detach
   create-function-with-finalizer
-  create-function-with-source
   create-reference-bigint
   create-reference-object-weak
   create-reference-symbol

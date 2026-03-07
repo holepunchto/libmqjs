@@ -1342,12 +1342,94 @@ js_create_function(js_env_t *env, const char *name, size_t len, js_function_cb c
 
 int
 js_create_function_with_source(js_env_t *env, const char *name, size_t name_len, const char *file, size_t file_len, js_value_t *const args[], size_t args_len, int offset, js_value_t *source, js_value_t **result) {
-  int err;
+  if (JS_HasException(env->context)) return js__error(env);
 
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  JSCStringBuf str_buf;
+  const char *str;
 
-  return js__error(env);
+  size_t buf_len = 0;
+
+  buf_len += strlen("(function ");
+
+  if (name) {
+    if (name_len == (size_t) -1) buf_len += strlen(name);
+    else buf_len += name_len;
+  }
+
+  buf_len += strlen("(");
+
+  for (int i = 0; i < args_len; i++) {
+    if (i != 0) buf_len += strlen(", ");
+
+    str = JS_ToCString(env->context, args[i]->ref.val, &str_buf);
+    buf_len += strlen(str);
+  }
+
+  buf_len += strlen(") {\n");
+
+  str = JS_ToCString(env->context, source->ref.val, &str_buf);
+  buf_len += strlen(str);
+
+  buf_len += strlen("})\n");
+
+  char *buf = malloc(buf_len + 1 /* NULL */);
+
+  buf[0] = '\0';
+
+  strcat(buf, "(function ");
+
+  if (name) {
+    if (name_len == (size_t) -1) strcat(buf, name);
+    else strncat(buf, name, name_len);
+  }
+
+  strcat(buf, "(");
+
+  for (int i = 0; i < args_len; i++) {
+    if (i != 0) strcat(buf, ", ");
+
+    str = JS_ToCString(env->context, args[i]->ref.val, &str_buf);
+    strcat(buf, str);
+  }
+
+  strcat(buf, ") {\n");
+
+  str = JS_ToCString(env->context, source->ref.val, &str_buf);
+  strcat(buf, str);
+
+  strcat(buf, "})\n");
+
+  if (file == NULL) file = "";
+
+  JSValue function = JS_Eval(
+    env->context,
+    buf,
+    buf_len,
+    file,
+    JS_EVAL_RETVAL
+  );
+
+  free(buf);
+
+  if (JS_IsException(function)) {
+    if (env->depth == 0) {
+      JSValue error = JS_GetException(env->context);
+
+      js__uncaught_exception(env, error);
+    }
+
+    return js__error(env);
+  }
+
+  js_value_t *wrapper = malloc(sizeof(js_value_t));
+
+  wrapper->ref.val = function;
+
+  *result = wrapper;
+
+  js__attach_to_handle_scope(env, env->scope, wrapper);
+
+  return 0;
 }
 
 int
