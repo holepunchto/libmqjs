@@ -244,7 +244,6 @@ list(APPEND skipped_tests
   add-type-tag
   add-type-tag-delegate
   call-function-in-context
-  call-threadsafe-function-after-release
   coerce-string-to-number
   coerce-symbol-to-string
   create-arraybuffer
@@ -259,15 +258,8 @@ list(APPEND skipped_tests
   create-delegate-has-throw
   create-delegate-keys-throw
   create-delegate-set-throw
-  create-external
   create-external-arraybuffer-with-finalizer
   create-external-arraybuffer-with-finalizer-detach
-  create-external-with-finalizer
-  create-function
-  create-function-args-extra
-  create-function-args-fewer
-  create-function-throw
-  create-function-throw-indirect
   create-function-with-finalizer
   create-function-with-source
   create-reference-array
@@ -282,8 +274,6 @@ list(APPEND skipped_tests
   create-reference-string
   create-reference-symbol
   create-reference-undefined
-  create-threadsafe-function
-  create-typed-function-no-jit
   create-uint8array
   create-unsafe-arraybuffer
   define-class
@@ -299,14 +289,10 @@ list(APPEND skipped_tests
   get-typedarray-info-uint8array
   get-typedarray-info-uint8array-large
   get-typedarray-info-uint8array-with-offset
-  many-large-allocs
-  many-small-allocs
   run-script-in-context
   terminate-execution
-  threads-platform-loop
   typeof-bigint
   typeof-external
-  typeof-object
   typeof-symbol
   wrap
   wrap-remove-with-finalizer

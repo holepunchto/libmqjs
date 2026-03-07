@@ -23,6 +23,26 @@
 #include <sys/mman.h>
 #endif
 
+#define JS_CLASS_EXTERNAL (JS_CLASS_USER + 0)
+
+#define JS_CLASS_COUNT (JS_CLASS_USER + 1)
+
+#define JS_CFUNCTION_native_function_call (JS_CFUNCTION_USER + 0)
+
+static JSValue
+js_date_now(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
+
+static JSValue
+js_external_constructor(JSContext *context, JSValue *receiver, int argc, JSValue *argv);
+
+static void
+js_external_finalizer(JSContext *context, void *opaque);
+
+static JSValue
+js_native_function_call(JSContext *ontext, JSValue *receiver, int argc, JSValue *argv, JSValue data);
+
+#include "atoms.h"
+
 typedef struct js_heap_s js_heap_t;
 typedef struct js_callback_s js_callback_t;
 typedef struct js_finalizer_s js_finalizer_t;
@@ -331,19 +351,6 @@ js__on_teardown(uv_async_t *handle) {
   if (env->refs == 0) js__close_env(env);
 }
 
-static JSValue
-js_date_now(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
-  int err;
-
-  uv_timeval64_t tv;
-  err = uv_gettimeofday(&tv);
-  assert(err == 0);
-
-  return JS_NewInt64(ctx, (int64_t) tv.tv_sec * 1000 + (tv.tv_usec / 1000));
-}
-
-#include "atoms.h"
-
 int
 js_create_env(uv_loop_t *loop, js_platform_t *platform, const js_env_options_t *options, js_env_t **result) {
   int err;
@@ -505,7 +512,7 @@ js_get_env_platform(js_env_t *env, js_platform_t **result) {
 
 static inline int
 js__error(js_env_t *env) {
-  return js_uncaught_exception;
+  return JS_HasException(env->context) ? js_pending_exception : js_uncaught_exception;
 }
 
 int
@@ -1204,14 +1211,67 @@ js_create_object(js_env_t *env, js_value_t **result) {
   return 0;
 }
 
-int
-js_create_function(js_env_t *env, const char *name, size_t len, js_function_cb cb, void *data, js_value_t **result) {
+static JSValue
+js_native_function_call(JSContext *context, JSValue *receiver, int argc, JSValue *argv, JSValue data) {
   int err;
 
-  err = js_throw_error(env, NULL, "Unsupported operation");
+  js_env_t *env = JS_GetContextOpaque(context);
+
+  js_callback_t *callback = JS_GetOpaque(context, data);
+
+  js_callback_info_t callback_info = {
+    .callback = callback,
+    .argc = argc,
+    .argv = argv,
+    .receiver = JS_NULL,
+    .new_target = JS_NULL,
+  };
+
+  js_handle_scope_t *scope;
+  err = js_open_handle_scope(env, &scope);
   assert(err == 0);
 
-  return js__error(env);
+  js_value_t *result = callback->cb(env, &callback_info);
+
+  JSValue value;
+
+  if (JS_HasException(env->context)) {
+    value = JS_EXCEPTION;
+  } else {
+    if (result) value = result->ref.val;
+    else value = JS_UNDEFINED;
+  }
+
+  err = js_close_handle_scope(env, scope);
+  assert(err == 0);
+
+  return value;
+}
+
+int
+js_create_function(js_env_t *env, const char *name, size_t len, js_function_cb cb, void *data, js_value_t **result) {
+  if (JS_HasException(env->context)) return js__error(env);
+
+  js_callback_t *callback = malloc(sizeof(js_callback_t));
+
+  callback->cb = cb;
+  callback->data = data;
+
+  JSValue external = JS_NewObjectClassUser(env->context, JS_CLASS_EXTERNAL);
+
+  JS_SetOpaque(env->context, external, callback);
+
+  js_value_t *wrapper = malloc(sizeof(js_value_t));
+
+  JS_PushGCRef(env->context, &wrapper->ref);
+
+  wrapper->ref.val = JS_NewCFunctionParams(env->context, JS_CFUNCTION_native_function_call, external);
+
+  *result = wrapper;
+
+  js__attach_to_handle_scope(env, env->scope, wrapper);
+
+  return 0;
 }
 
 int
@@ -1263,14 +1323,62 @@ js_create_array_with_length(js_env_t *env, size_t len, js_value_t **result) {
   return 0;
 }
 
+static JSValue
+js_external_constructor(JSContext *context, JSValue *receiver, int argc, JSValue *argv) {
+  return JS_NewObjectClassUser(context, JS_CLASS_EXTERNAL);
+}
+
+static void
+js_external_finalizer(JSContext *context, void *opaque) {
+  js_env_t *env = JS_GetContextOpaque(context);
+
+  js_finalizer_t *finalizer = opaque;
+
+  if (finalizer == NULL) return;
+
+  if (finalizer->finalize_cb) {
+    finalizer->finalize_cb(env, finalizer->data, finalizer->finalize_hint);
+  }
+
+  free(finalizer);
+}
+
 int
 js_create_external(js_env_t *env, void *data, js_finalize_cb finalize_cb, void *finalize_hint, js_value_t **result) {
+  // Allow continuing even with a pending exception
+
+  js_finalizer_t *finalizer = malloc(sizeof(js_finalizer_t));
+
+  finalizer->data = data;
+  finalizer->finalize_cb = finalize_cb;
+  finalizer->finalize_hint = finalize_hint;
+
+  JSValue external = JS_NewObjectClassUser(env->context, JS_CLASS_EXTERNAL);
+
+  JS_SetOpaque(env->context, external, finalizer);
+
+  js_value_t *wrapper = malloc(sizeof(js_value_t));
+
+  JS_PushGCRef(env->context, &wrapper->ref);
+
+  wrapper->ref.val = external;
+
+  *result = wrapper;
+
+  js__attach_to_handle_scope(env, env->scope, wrapper);
+
+  return 0;
+}
+
+static JSValue
+js_date_now(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
   int err;
 
-  err = js_throw_error(env, NULL, "Unsupported operation");
+  uv_timeval64_t tv;
+  err = uv_gettimeofday(&tv);
   assert(err == 0);
 
-  return js__error(env);
+  return JS_NewInt64(ctx, (int64_t) tv.tv_sec * 1000 + (tv.tv_usec / 1000));
 }
 
 int
@@ -2307,12 +2415,13 @@ js_get_value_string_latin1(js_env_t *env, js_value_t *value, latin1_t *str, size
 
 int
 js_get_value_external(js_env_t *env, js_value_t *value, void **result) {
-  int err;
+  // Allow continuing even with a pending exception
 
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_finalizer_t *finalizer = JS_GetOpaque(env->context, value->ref.val);
 
-  return js__error(env);
+  *result = finalizer->data;
+
+  return 0;
 }
 
 int
@@ -3529,7 +3638,7 @@ int
 js_is_exception_pending(js_env_t *env, bool *result) {
   // Allow continuing even with a pending exception
 
-  *result = false;
+  *result = JS_HasException(env->context);
 
   return 0;
 }
@@ -3587,12 +3696,13 @@ js_adjust_external_memory(js_env_t *env, int64_t change_in_bytes, int64_t *resul
 
 int
 js_request_garbage_collection(js_env_t *env) {
-  int err;
+  // Allow continuing even with a pending exception
 
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  if (env->platform->options.expose_garbage_collection) {
+    JS_GC(env->context);
+  }
 
-  return js__error(env);
+  return 0;
 }
 
 int

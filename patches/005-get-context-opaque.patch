@@ -1,0 +1,28 @@
+diff --git a/mquickjs.c b/mquickjs.c
+index 9b39047..76b1536 100644
+--- a/mquickjs.c
++++ b/mquickjs.c
+@@ -3680,6 +3680,11 @@ void JS_SetContextOpaque(JSContext *ctx, void *opaque)
+     ctx->opaque = opaque;
+ }
+ 
++void *JS_GetContextOpaque(JSContext *ctx)
++{
++    return ctx->opaque;
++}
++
+ void JS_SetInterruptHandler(JSContext *ctx, JSInterruptHandler *interrupt_handler)
+ {
+     ctx->interrupt_handler = interrupt_handler;
+diff --git a/mquickjs.h b/mquickjs.h
+index d7726d2..44b39fc 100644
+--- a/mquickjs.h
++++ b/mquickjs.h
+@@ -265,6 +265,7 @@ JSContext *JS_NewContext(void *mem_start, size_t mem_size, const JSSTDLibraryDef
+ JSContext *JS_NewContext2(void *mem_start, size_t mem_size, const JSSTDLibraryDef *stdlib_def, JS_BOOL prepare_compilation);
+ void JS_FreeContext(JSContext *ctx);
+ void JS_SetContextOpaque(JSContext *ctx, void *opaque);
++void *JS_GetContextOpaque(JSContext *ctx);
+ void JS_SetInterruptHandler(JSContext *ctx, JSInterruptHandler *interrupt_handler);
+ void JS_SetRandomSeed(JSContext *ctx, uint64_t seed);
+ JSValue JS_GetGlobalObject(JSContext *ctx);

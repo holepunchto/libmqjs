@@ -3,6 +3,17 @@
 #include <stdio.h>
 #include <string.h>
 
+static const JSPropDef js_external_proto[] = {
+  JS_PROP_END,
+};
+
+static const JSPropDef js_external[] = {
+  JS_PROP_END,
+};
+
+static const JSClassDef js_external_class =
+  JS_CLASS_DEF("External", 0, js_external_constructor, JS_CLASS_EXTERNAL, js_external, js_external_proto, NULL, js_external_finalizer);
+
 static const JSPropDef js_object_proto[] = {
   JS_CFUNC_DEF("hasOwnProperty", 1, js_object_hasOwnProperty),
   JS_CFUNC_DEF("toString", 0, js_object_toString),
@@ -319,11 +330,15 @@ static const JSPropDef js_global_object[] = {
   JS_PROP_UNDEFINED_DEF("undefined", 0),
   JS_PROP_NULL_DEF("globalThis", 0),
 
+  JS_PROP_CLASS_DEF("External", &js_external_class),
+
   JS_PROP_END,
 };
 
 static const JSPropDef js_c_function_decl[] = {
   JS_CFUNC_SPECIAL_DEF("bound", 0, generic_params, js_function_bound),
+
+  JS_CFUNC_SPECIAL_DEF("nativeFunctionCall", 0, generic_params, js_native_function_call),
 
   JS_PROP_END,
 };
