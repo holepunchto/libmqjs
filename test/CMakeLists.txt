@@ -248,9 +248,6 @@ list(APPEND skipped_tests
   coerce-symbol-to-string
   create-arraybuffer
   create-arraybuffer-with-backing-store
-  create-date
-  create-date-nan
-  create-date-overflow
   create-delegate
   create-delegate-delete-throw
   create-delegate-get-throw

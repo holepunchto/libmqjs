@@ -30,6 +30,9 @@
 #define JS_CFUNCTION_native_function_call (JS_CFUNCTION_USER + 0)
 
 static JSValue
+js_date_constructor(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
+
+static JSValue
 js_date_now(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
 
 static JSValue
@@ -492,7 +495,7 @@ js_on_dynamic_import(js_env_t *env, js_dynamic_import_cb cb, void *data) {
 }
 
 int
-js_on_dynamic_import_transitional(js_env_t *env, js_dynamic_import_transitional_cb cb, void *data) {
+js_on_dynamic_import_transitional(js_env_t *env, js_dynamic_import_cb cb, void *data) {
   return 0;
 }
 
@@ -1519,6 +1522,28 @@ js_create_external(js_env_t *env, void *data, js_finalize_cb finalize_cb, void *
 }
 
 static JSValue
+js_date_constructor(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
+  int err;
+
+  double time;
+  argc &= ~FRAME_CF_CTOR;
+
+  if (argc == 0) {
+    uv_timeval64_t tv;
+    err = uv_gettimeofday(&tv);
+    assert(err == 0);
+
+    time = (int64_t) (tv.tv_sec * 1000 + (tv.tv_usec / 1000));
+  } else if (argc == 1 && JS_IsNumber(ctx, argv[0])) {
+    if (JS_ToNumber(ctx, &time, argv[0])) return JS_EXCEPTION;
+  } else {
+    return JS_ThrowTypeError(ctx, "Unsupported Date() parameter");
+  }
+
+  return JS_NewDate(ctx, time);
+}
+
+static JSValue
 js_date_now(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
   int err;
 
@@ -1531,12 +1556,21 @@ js_date_now(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
 
 int
 js_create_date(js_env_t *env, double time, js_value_t **result) {
-  int err;
+  // Allow continuing even with a pending exception
 
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  if (fabs(time) > 8.64e15) time = NAN;
 
-  return js__error(env);
+  js_value_t *wrapper = malloc(sizeof(js_value_t));
+
+  JS_PushGCRef(env->context, &wrapper->ref);
+
+  wrapper->ref.val = JS_NewDate(env->context, time);
+
+  *result = wrapper;
+
+  js__attach_to_handle_scope(env, env->scope, wrapper);
+
+  return 0;
 }
 
 int
@@ -2584,12 +2618,11 @@ js_get_value_external(js_env_t *env, js_value_t *value, void **result) {
 
 int
 js_get_value_date(js_env_t *env, js_value_t *value, double *result) {
-  int err;
+  // Allow continuing even with a pending exception
 
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  JS_ToNumber(env->context, result, value->ref.val);
 
-  return js__error(env);
+  return 0;
 }
 
 int
@@ -3906,7 +3939,7 @@ js_on_inspector_response(js_env_t *env, js_inspector_t *inspector, js_inspector_
 }
 
 int
-js_on_inspector_response_transitional(js_env_t *env, js_inspector_t *inspector, js_inspector_message_transitional_cb cb, void *data) {
+js_on_inspector_response_transitional(js_env_t *env, js_inspector_t *inspector, js_inspector_message_cb cb, void *data) {
   return 0;
 }
 
@@ -3926,7 +3959,7 @@ js_connect_inspector(js_env_t *env, js_inspector_t *inspector) {
 }
 
 int
-js_send_inspector_request(js_env_t *env, js_inspector_t *inspector, js_value_t *message) {
+js_send_inspector_request(js_env_t *env, js_inspector_t *inspector, const char *message, size_t len) {
   int err;
 
   err = js_throw_error(env, NULL, "Unsupported operation");

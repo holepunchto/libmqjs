@@ -8,12 +8,7 @@ fetch_package(
   "github:bellard/mquickjs"
   SOURCE_DIR mqjs
   PATCHES
-    patches/001-remove-unused-headers.patch
-    patches/002-has-exception.patch
-    patches/003-exception-uninitialized.patch
-    patches/004-is-object.patch
-    patches/005-get-context-opaque.patch
-    patches/006-is-array.patch
+    patches/001-is-object.patch
 )
 
 set(MQJS_BUILD_ATOMS OFF CACHE BOOL "Build the standard library atoms for ROM")
