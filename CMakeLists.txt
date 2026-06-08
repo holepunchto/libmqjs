@@ -9,6 +9,12 @@ fetch_package(
   SOURCE_DIR mqjs
   PATCHES
     patches/001-is-object.patch
+    patches/002-sweep-finalize-swallowed-blocks.patch
+    patches/003-is-strict-equal.patch
+    patches/004-to-int64.patch
+    patches/005-catch-shadow.patch
+    patches/006-arraybuffer-typedarray.patch
+    patches/007-float16-array.patch
 )
 
 set(MQJS_BUILD_ATOMS OFF CACHE BOOL "Build the standard library atoms for ROM")

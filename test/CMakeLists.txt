@@ -16,15 +16,21 @@ list(APPEND tests
   call-function-microtask
   call-function-microtask-nested
   call-function-throw
+  call-function-with-checkpoint
   call-threadsafe-function-after-release
   call-threadsafe-function-with-data
   coerce-number-to-string
   coerce-object-to-string
   coerce-string-to-number
   coerce-symbol-to-string
+  coerce-to-boolean
+  coerce-to-object
   create-arraybuffer
   create-arraybuffer-too-large
   create-arraybuffer-with-backing-store
+  create-bigint-int64
+  create-bigint-words
+  create-dataview
   create-date
   create-date-nan
   create-date-overflow
@@ -41,6 +47,7 @@ list(APPEND tests
   create-external-arraybuffer
   create-external-arraybuffer-with-finalizer
   create-external-arraybuffer-with-finalizer-detach
+  create-external-sharedarraybuffer
   create-external-string-latin1
   create-external-string-latin1-with-finalizer
   create-external-string-utf8
@@ -51,13 +58,16 @@ list(APPEND tests
   create-function
   create-function-args-extra
   create-function-args-fewer
+  create-function-return-double
   create-function-throw
   create-function-throw-indirect
   create-function-with-finalizer
   create-function-with-source
+  create-int64
   create-module-import-missing
   create-promise-reject
   create-promise-resolve
+  create-property-key
   create-reference-array
   create-reference-bigint
   create-reference-boolean
@@ -72,12 +82,15 @@ list(APPEND tests
   create-reference-undefined
   create-sharedarraybuffer
   create-sharedarraybuffer-with-backing-store
+  create-string-latin1
   create-string-utf8
   create-string-utf8-with-null
+  create-string-utf16le
   create-threadsafe-function
   create-threadsafe-function-with-callback
   create-threadsafe-function-with-context
   create-threadsafe-function-with-finalizer
+  create-typed-errors
   create-typed-function
   create-typed-function-no-jit
   create-typed-function-with-arraybuffer
@@ -98,42 +111,102 @@ list(APPEND tests
   create-typed-function-with-uint64
   create-uint8array
   create-unsafe-arraybuffer
+  create-unsafe-sharedarraybuffer
   define-class
   define-class-with-method
   define-class-with-static-method
   define-class-with-static-value
   define-class-with-symbol-property
   define-class-with-value
+  define-properties
+  delete-element
+  delete-property
   dynamic-import
   dynamic-import-with-promise
   dynamic-import-without-handler
+  escapable-handle-scope
   fatal-exception
+  garbage-collection-tracking
+  get-array-elements
   get-arraybuffer-info
+  get-bindings
   get-dataview-info
+  get-env-loop
+  get-env-platform
   get-error-location
+  get-filtered-property-names
   get-heap-space-statistics
+  get-heap-statistics
+  get-module-name
+  get-new-target
   get-platform-identifier
   get-platform-limits
+  get-platform-loop
   get-platform-version
   get-property-missing
+  get-prototype
+  get-sharedarraybuffer-info
   get-typedarray-info-uint16array
   get-typedarray-info-uint16array-large
   get-typedarray-info-uint8array
   get-typedarray-info-uint8array-large
   get-typedarray-info-uint8array-with-offset
+  get-value-bigint-uint64
+  get-value-int32-int64
   get-value-string-utf8
   get-value-string-utf8-length
   get-value-string-utf8-no-null
+  has-element
+  has-own-property
+  has-property
   import-meta
   import-meta-throw
   inspector
+  inspector-attach-context
+  inspector-multiple-debugger-enable
   inspector-pause
+  is-arguments
+  is-array
+  is-arraybuffer
+  is-bigint64array
+  is-biguint64array
+  is-dataview
+  is-date
+  is-detached-arraybuffer
+  is-error
+  is-external
+  is-float16array
+  is-float32array
+  is-float64array
+  is-generator
+  is-int8array
+  is-int16array
+  is-int32array
+  is-int32-uint32
+  is-map
+  is-map-iterator
+  is-module-namespace
+  is-promise
+  is-proxy
+  is-regexp
+  is-set
+  is-set-iterator
+  is-sharedarraybuffer
+  is-typedarray
+  is-uint8array
+  is-uint8clampedarray
+  is-uint16array
+  is-uint32array
+  is-weak-map
+  is-weak-ref
+  is-weak-set
   many-large-allocs
   many-small-allocs
   promise-rejection
   promise-rejection-unhandled
   promise-rejection-unhandled-reentrant
   promise-rejection-unhandled-reentrant-deferred
+  reference-unref
   run-module
   run-module-async
   run-module-cyclic-import
@@ -145,12 +218,21 @@ list(APPEND tests
   run-script-ignore-return
   run-script-in-context
   run-script-throw
+  set-array-elements
   set-named-property
+  set-property
+  symbol-for
   terminate-execution
+  threadsafe-function-context-acquire
+  threadsafe-function-ref-unref
   threads
   threads-platform-loop
   throw-error
   throw-error-formatted
+  throw-range-error
+  throw-reference-error
+  throw-syntax-error
+  throw-type-error
   typeof-bigint
   typeof-boolean
   typeof-external
@@ -197,12 +279,19 @@ list(APPEND skipped_tests
 
   # Not supported
   inspector
+  inspector-attach-context
+  inspector-multiple-debugger-enable
   inspector-pause
 
   # Not supported
   get-error-location
 
   # Not supported
+  create-module-import-missing
+  get-module-name
+  import-meta
+  import-meta-throw
+  is-module-namespace
   run-module
   run-module-async
   run-module-cyclic-import
@@ -210,9 +299,6 @@ list(APPEND skipped_tests
   run-module-in-context
   run-module-nested-import
   run-module-throw
-  create-module-import-missing
-  import-meta
-  import-meta-throw
 
   # Not supported
   dynamic-import
@@ -230,24 +316,49 @@ list(APPEND skipped_tests
   call-function-microtask-nested
   create-promise-reject
   create-promise-resolve
+  is-promise
   promise-rejection
   promise-rejection-unhandled
   promise-rejection-unhandled-reentrant
   promise-rejection-unhandled-reentrant-deferred
 
   # Not supported
+  create-external-sharedarraybuffer
   create-sharedarraybuffer
   create-sharedarraybuffer-with-backing-store
+  create-unsafe-sharedarraybuffer
+  get-sharedarraybuffer-info
+  is-sharedarraybuffer
+
+  # Not supported
+  create-bigint-int64
+  create-bigint-words
+  create-reference-bigint
+  get-value-bigint-uint64
+  is-bigint64array
+  is-biguint64array
+  typeof-bigint
+
+  # Not supported
+  create-dataview
+  get-dataview-info
+  is-dataview
+
+  # Not supported
+  coerce-symbol-to-string
+  create-property-key
+  create-reference-symbol
+  symbol-for
+  typeof-symbol
 
   # Not implemented
-  add-finalizer
-  add-type-tag
-  add-type-tag-delegate
-  call-function-in-context
-  coerce-string-to-number
-  coerce-symbol-to-string
-  create-arraybuffer
   create-arraybuffer-with-backing-store
+  create-external-arraybuffer-with-finalizer
+  create-external-arraybuffer-with-finalizer-detach
+  is-detached-arraybuffer
+
+  # Not implemented
+  add-type-tag-delegate
   create-delegate
   create-delegate-delete-throw
   create-delegate-get-throw
@@ -255,36 +366,46 @@ list(APPEND skipped_tests
   create-delegate-has-throw
   create-delegate-keys-throw
   create-delegate-set-throw
-  create-external-arraybuffer-with-finalizer
-  create-external-arraybuffer-with-finalizer-detach
-  create-function-with-finalizer
-  create-reference-bigint
-  create-reference-object-weak
-  create-reference-symbol
-  create-uint8array
-  create-unsafe-arraybuffer
+
+  # Not implemented
   define-class
   define-class-with-method
   define-class-with-static-method
   define-class-with-static-value
   define-class-with-symbol-property
   define-class-with-value
-  get-arraybuffer-info
-  get-dataview-info
-  get-typedarray-info-uint16array
-  get-typedarray-info-uint16array-large
-  get-typedarray-info-uint8array
-  get-typedarray-info-uint8array-large
-  get-typedarray-info-uint8array-with-offset
-  run-script-in-context
-  terminate-execution
-  typeof-bigint
-  typeof-external
-  typeof-symbol
-  wrap
-  wrap-remove-with-finalizer
-  wrap-with-finalizer
-  wrap-with-reference
+
+  # Not implemented
+  define-properties
+  delete-element
+  delete-property
+  get-filtered-property-names
+  get-prototype
+  has-element
+  has-own-property
+  has-property
+  set-property
+
+  # Not implemented
+  is-arguments
+  is-generator
+  is-map
+  is-map-iterator
+  is-proxy
+  is-set
+  is-set-iterator
+  is-weak-map
+  is-weak-ref
+  is-weak-set
+
+  # Not implemented
+  call-function-with-checkpoint
+  coerce-string-to-number
+  coerce-to-boolean
+  coerce-to-object
+  garbage-collection-tracking
+  get-heap-statistics
+  get-new-target
 )
 
 foreach(test IN LISTS tests)

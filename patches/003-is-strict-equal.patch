@@ -1,0 +1,29 @@
+diff --git a/mquickjs.c b/mquickjs.c
+index 188eeb1..b7a5894 100644
+--- a/mquickjs.c
++++ b/mquickjs.c
+@@ -4724,6 +4724,11 @@ static BOOL js_strict_eq(JSContext *ctx, JSValue op1, JSValue op2)
+     return res;
+ }
+ 
++JS_BOOL JS_IsStrictEqual(JSContext *ctx, JSValue a, JSValue b)
++{
++    return js_strict_eq(ctx, a, b);
++}
++
+ static JSValue js_strict_eq_slow(JSContext *ctx, BOOL is_neq)
+ {
+     BOOL res;
+diff --git a/mquickjs.h b/mquickjs.h
+index 31d1885..bce505d 100644
+--- a/mquickjs.h
++++ b/mquickjs.h
+@@ -210,6 +210,8 @@ JS_BOOL JS_IsObject(JSContext *ctx, JSValue val);
+ JS_BOOL JS_IsFunction(JSContext *ctx, JSValue val);
+ JS_BOOL JS_IsArray(JSContext *ctx, JSValue obj);
+ 
++JS_BOOL JS_IsStrictEqual(JSContext *ctx, JSValue a, JSValue b);
++
+ int JS_GetClassID(JSContext *ctx, JSValue val);
+ void JS_SetOpaque(JSContext *ctx, JSValue val, void *opaque);
+ void *JS_GetOpaque(JSContext *ctx, JSValue val);
