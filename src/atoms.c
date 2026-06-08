@@ -264,6 +264,7 @@ TA_DEF(Int16Array, JS_CLASS_INT16_ARRAY, 2)
 TA_DEF(Uint16Array, JS_CLASS_UINT16_ARRAY, 2)
 TA_DEF(Int32Array, JS_CLASS_INT32_ARRAY, 4)
 TA_DEF(Uint32Array, JS_CLASS_UINT32_ARRAY, 4)
+TA_DEF(Float16Array, JS_CLASS_FLOAT16_ARRAY, 2)
 TA_DEF(Float32Array, JS_CLASS_FLOAT32_ARRAY, 4)
 TA_DEF(Float64Array, JS_CLASS_FLOAT64_ARRAY, 8)
 
@@ -321,6 +322,7 @@ static const JSPropDef js_global_object[] = {
   JS_PROP_CLASS_DEF("Uint16Array", &js_Uint16Array_class),
   JS_PROP_CLASS_DEF("Int32Array", &js_Int32Array_class),
   JS_PROP_CLASS_DEF("Uint32Array", &js_Uint32Array_class),
+  JS_PROP_CLASS_DEF("Float16Array", &js_Float16Array_class),
   JS_PROP_CLASS_DEF("Float32Array", &js_Float32Array_class),
   JS_PROP_CLASS_DEF("Float64Array", &js_Float64Array_class),
 
