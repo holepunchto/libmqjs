@@ -202,6 +202,9 @@ list(APPEND tests
   is-weak-set
   many-large-allocs
   many-small-allocs
+  prepare-script
+  prepare-script-in-context
+  prepare-script-run-multiple
   promise-rejection
   promise-rejection-unhandled
   promise-rejection-unhandled-reentrant
@@ -350,6 +353,11 @@ list(APPEND skipped_tests
   create-reference-symbol
   symbol-for
   typeof-symbol
+
+  # Not supported
+  prepare-script
+  prepare-script-in-context
+  prepare-script-run-multiple
 
   # Not implemented
   create-arraybuffer-with-backing-store
