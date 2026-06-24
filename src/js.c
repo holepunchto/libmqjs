@@ -804,6 +804,16 @@ js_delete_script(js_env_t *env, js_script_t *script) {
 }
 
 int
+js_get_script_name(js_env_t *env, js_script_t *script, const char **result) {
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
+
+  return js__error(env);
+}
+
+int
 js_get_script_id(js_env_t *env, js_script_t *script, js_value_t **result) {
   int err;
 
