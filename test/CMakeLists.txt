@@ -43,6 +43,9 @@ list(APPEND tests
   create-delegate-set-throw
   create-env
   create-env-multiple
+  create-env-multiple-concurrent
+  create-env-multiple-isolated
+  create-env-multiple-microtask
   create-external
   create-external-arraybuffer
   create-external-arraybuffer-with-finalizer
@@ -332,6 +335,7 @@ list(APPEND skipped_tests
   # Not supported
   call-function-microtask
   call-function-microtask-nested
+  create-env-multiple-microtask
   create-promise-reject
   create-promise-resolve
   is-promise
