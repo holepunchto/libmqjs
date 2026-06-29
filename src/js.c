@@ -1716,8 +1716,6 @@ js_create_object(js_env_t *env, js_value_t **result) {
 
 int
 js_create_object_with_prototype(js_env_t *env, js_value_t *prototype, js_value_t **result) {
-  // Allow continuing even with a pending exception
-
   int err;
 
   err = js_throw_error(env, NULL, "Unsupported operation");
