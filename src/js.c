@@ -1724,6 +1724,16 @@ js_create_object_with_prototype(js_env_t *env, js_value_t *prototype, js_value_t
   return js__error(env);
 }
 
+int
+js_create_object_with_properties(js_env_t *env, js_value_t *prototype, js_value_t *const property_names[], js_value_t *const property_values[], size_t property_count, js_value_t **result) {
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
+
+  return js__error(env);
+}
+
 static JSValue
 js_native_function_call(JSContext *context, JSValue *receiver, int argc, JSValue *argv, JSValue data) {
   int err;
