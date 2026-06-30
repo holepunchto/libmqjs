@@ -221,6 +221,7 @@ list(APPEND tests
   prepare-script-syntax-error
   prepare-script-throw
   promise-rejection
+  promise-rejection-handled-reentrant-deferred
   promise-rejection-unhandled
   promise-rejection-unhandled-reentrant
   promise-rejection-unhandled-reentrant-deferred
@@ -345,6 +346,7 @@ list(APPEND skipped_tests
   create-promise-resolve
   is-promise
   promise-rejection
+  promise-rejection-handled-reentrant-deferred
   promise-rejection-unhandled
   promise-rejection-unhandled-reentrant
   promise-rejection-unhandled-reentrant-deferred
