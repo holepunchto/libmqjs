@@ -3249,6 +3249,26 @@ js_set_prototype(js_env_t *env, js_value_t *object, js_value_t *prototype) {
 }
 
 int
+js_seal(js_env_t *env, js_value_t *object) {
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
+
+  return js__error(env);
+}
+
+int
+js_freeze(js_env_t *env, js_value_t *object) {
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
+
+  return js__error(env);
+}
+
+int
 js_get_property_names(js_env_t *env, js_value_t *object, js_value_t **result) {
   int err;
 
