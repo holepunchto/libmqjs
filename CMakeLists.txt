@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 4.0)
 
 find_package(cmake-fetch REQUIRED PATHS node_modules/cmake-fetch)
+find_package(cmake-toolchains REQUIRED PATHS node_modules/cmake-toolchains)
 
 project(js C)
 
@@ -17,61 +18,30 @@ fetch_package(
     patches/007-float16-array.patch
 )
 
-set(MQJS_BUILD_ATOMS OFF CACHE BOOL "Build the standard library atoms for ROM")
+include(ExternalProject)
 
-if(MQJS_BUILD_ATOMS)
-  add_library(mqjs_stdlib OBJECT)
+set(mqjs_build_prefix ${CMAKE_CURRENT_BINARY_DIR}/atoms)
 
-  set_target_properties(
-    mqjs_stdlib
-    PROPERTIES
-    C_STANDARD 11
-    POSITION_INDEPENDENT_CODE ON
-  )
-
-  target_sources(
-    mqjs_stdlib
-    PRIVATE
-      src/atoms.c
-  )
-
-  target_include_directories(
-    mqjs_stdlib
-    PUBLIC
-      ${mqjs}
-  )
-
-  add_executable(mqjs_build)
-
-  set_target_properties(
-    mqjs_build
-    PROPERTIES
-    C_STANDARD 11
-    POSITION_INDEPENDENT_CODE ON
-    OUTPUT_NAME mqjs-build
-  )
-
-  target_sources(
-    mqjs_build
-    PRIVATE
-      ${mqjs}/mquickjs_build.c
-  )
-
-  target_link_libraries(
-    mqjs_build
-    PRIVATE
-      mqjs_stdlib
-  )
-
-  set(mqjs_build $<TARGET_FILE:mqjs_build>)
+if(CMAKE_HOST_WIN32)
+  set(mqjs_build ${mqjs_build_prefix}/bin/mqjs-build.exe)
 else()
-  find_program(
-    mqjs_build
-    NAMES mqjs-build
-    PATHS build
-    REQUIRED
-  )
+  set(mqjs_build ${mqjs_build_prefix}/bin/mqjs-build)
 endif()
+
+ExternalProject_Add(
+  mqjs_build_host
+  SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/atoms
+  PREFIX ${mqjs_build_prefix}
+  CMAKE_ARGS
+    -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+    -DCMAKE_MESSAGE_LOG_LEVEL=${CMAKE_MESSAGE_LOG_LEVEL}
+    -DCMAKE_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}
+    -DCMAKE_TOOLCHAIN_FILE=${CMAKE_HOST_TOOLCHAIN_FILE}
+    -DCMAKE_INSTALL_PREFIX=${mqjs_build_prefix}
+    -Dmqjs=${mqjs}
+  BUILD_ALWAYS ON
+  INSTALL_BYPRODUCTS ${mqjs_build}
+)
 
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
   set(mqjs_build_width 64)
@@ -82,6 +52,7 @@ endif()
 add_custom_command(
   OUTPUT ${mqjs}/mquickjs_atom.h
   COMMAND ${mqjs_build} -m${mqjs_build_width} -a > ${mqjs}/mquickjs_atom.h
+  DEPENDS ${mqjs_build}
   CODEGEN
 )
 
@@ -118,6 +89,7 @@ fetch_package("github:holepunchto/libintrusive")
 add_custom_command(
   OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/src/atoms.h
   COMMAND ${mqjs_build} -m${mqjs_build_width} > ${CMAKE_CURRENT_SOURCE_DIR}/src/atoms.h
+  DEPENDS ${mqjs_build}
   CODEGEN
 )
 
