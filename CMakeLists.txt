@@ -83,7 +83,7 @@ target_include_directories(
 
 add_library(js OBJECT)
 
-fetch_package("github:holepunchto/libjs#code-cache" SOURCE_DIR js)
+fetch_package("github:holepunchto/libjs" SOURCE_DIR js)
 fetch_package("github:holepunchto/libintrusive")
 
 add_custom_command(
