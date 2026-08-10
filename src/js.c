@@ -2529,10 +2529,28 @@ js_is_boolean(js_env_t *env, js_value_t *value, bool *result) {
 }
 
 int
+js_is_boolean_object(js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  *result = JS_GetClassID(env->context, value->ref.val) == JS_CLASS_BOOLEAN;
+
+  return 0;
+}
+
+int
 js_is_number(js_env_t *env, js_value_t *value, bool *result) {
   // Allow continuing even with a pending exception
 
   *result = JS_IsNumber(env->context, value->ref.val);
+
+  return 0;
+}
+
+int
+js_is_number_object(js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  *result = JS_GetClassID(env->context, value->ref.val) == JS_CLASS_NUMBER;
 
   return 0;
 }
@@ -2585,9 +2603,28 @@ js_is_string(js_env_t *env, js_value_t *value, bool *result) {
 }
 
 int
+js_is_string_object(js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  *result = JS_GetClassID(env->context, value->ref.val) == JS_CLASS_STRING;
+
+  return 0;
+}
+
+int
 js_is_symbol(js_env_t *env, js_value_t *value, bool *result) {
   // Allow continuing even with a pending exception
 
+  *result = false;
+
+  return 0;
+}
+
+int
+js_is_symbol_object(js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  // This engine has no symbol support.
   *result = false;
 
   return 0;
@@ -2694,6 +2731,16 @@ int
 js_is_bigint(js_env_t *env, js_value_t *value, bool *result) {
   // Allow continuing even with a pending exception
 
+  *result = false;
+
+  return 0;
+}
+
+int
+js_is_bigint_object(js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  // This engine has no bigint support.
   *result = false;
 
   return 0;
