@@ -841,6 +841,16 @@ js_get_script_id(js_env_t *env, js_script_t *script, js_value_t **result) {
 }
 
 int
+js_on_script_dynamic_import(js_env_t *env, js_script_t *script, js_dynamic_import_cb cb, void *data) {
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
+
+  return js__error(env);
+}
+
+int
 js_create_module(js_env_t *env, const char *name, size_t len, int offset, js_value_t *source, js_module_meta_cb cb, void *data, js_module_t **result) {
   int err;
 
@@ -918,6 +928,16 @@ js_get_default_module_id(js_env_t *env, js_value_t **result) {
 }
 
 int
+js_on_module_dynamic_import(js_env_t *env, js_module_t *module, js_dynamic_import_cb cb, void *data) {
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
+
+  return js__error(env);
+}
+
+int
 js_get_module_namespace(js_env_t *env, js_module_t *module, js_value_t **result) {
   int err;
 
@@ -969,6 +989,17 @@ js__on_reference_finalize(js_env_t *env, void *data, void *finalize_hint) {
   reference->finalized = true;
 }
 
+static js_finalizer_t *
+js__get_external(js_env_t *env, JSValue object, const char *name) {
+  JSValue external = JS_GetPropertyStr(env->context, object, name);
+
+  if (JS_IsException(external)) return NULL;
+
+  if (JS_GetClassID(env->context, external) != JS_CLASS_EXTERNAL) return NULL;
+
+  return JS_GetOpaque(env->context, external);
+}
+
 static inline void
 js__set_weak_reference(js_env_t *env, js_ref_t *reference) {
   if (reference->finalized) return;
@@ -987,14 +1018,12 @@ js__set_weak_reference(js_env_t *env, js_ref_t *reference) {
   node->finalizer.finalize_hint = NULL;
   node->next = NULL;
 
-  JSValue existing = JS_GetPropertyStr(env->context, reference->ref.val, "__native_finalizer");
+  js_finalizer_t *existing = js__get_external(env, reference->ref.val, "__native_finalizer");
 
-  if (JS_IsObject(env->context, existing)) {
-    js_finalizer_t *finalizer = JS_GetOpaque(env->context, existing);
+  if (existing != NULL && existing->finalize_cb == js__finalizer_list_finalize) {
+    node->next = existing->data;
 
-    node->next = finalizer->data;
-
-    finalizer->data = node;
+    existing->data = node;
   } else {
     js_finalizer_t *finalizer = malloc(sizeof(js_finalizer_t));
 
@@ -1021,11 +1050,9 @@ js__clear_weak_reference(js_env_t *env, js_ref_t *reference) {
   JSGCRef saved;
   js__save_exception(env, &saved);
 
-  JSValue existing = JS_GetPropertyStr(env->context, reference->ref.val, "__native_finalizer");
+  js_finalizer_t *finalizer = js__get_external(env, reference->ref.val, "__native_finalizer");
 
-  if (JS_IsObject(env->context, existing)) {
-    js_finalizer_t *finalizer = JS_GetOpaque(env->context, existing);
-
+  if (finalizer != NULL && finalizer->finalize_cb == js__finalizer_list_finalize) {
     js_finalizer_list_t *head = finalizer->data;
     js_finalizer_list_t *prev = NULL;
 
@@ -1152,6 +1179,17 @@ int
 js_wrap(js_env_t *env, js_value_t *object, void *data, js_finalize_cb finalize_cb, void *finalize_hint, js_ref_t **result) {
   if (JS_HasException(env->context)) return js__error(env);
 
+  int err;
+
+  if (js__get_external(env, object->ref.val, "__native_external") != NULL) {
+    err = js_throw_errorf(env, NULL, "Object is already wrapped");
+    assert(err == 0);
+
+    return js__error(env);
+  }
+
+  if (JS_HasException(env->context)) return js__error(env);
+
   js_finalizer_t *finalizer = malloc(sizeof(js_finalizer_t));
 
   finalizer->data = data;
@@ -1221,7 +1259,18 @@ js_unwrap(js_env_t *env, js_value_t *object, void **result) {
     return js__error(env);
   }
 
-  js_finalizer_t *finalizer = JS_GetOpaque(env->context, external);
+  js_finalizer_t *finalizer = NULL;
+
+  if (JS_GetClassID(env->context, external) == JS_CLASS_EXTERNAL) {
+    finalizer = JS_GetOpaque(env->context, external);
+  }
+
+  if (finalizer == NULL) {
+    int err = js_throw_type_error(env, NULL, "Object is not wrapped");
+    assert(err == 0);
+
+    return js__error(env);
+  }
 
   *result = finalizer->data;
 
@@ -1248,7 +1297,20 @@ js_remove_wrap(js_env_t *env, js_value_t *object, void **result) {
     return js__error(env);
   }
 
-  js_finalizer_t *finalizer = JS_GetOpaque(env->context, external);
+  js_finalizer_t *finalizer = NULL;
+
+  if (JS_GetClassID(env->context, external) == JS_CLASS_EXTERNAL) {
+    finalizer = JS_GetOpaque(env->context, external);
+  }
+
+  if (finalizer == NULL) {
+    env->depth--;
+
+    int err = js_throw_type_error(env, NULL, "Object is not wrapped");
+    assert(err == 0);
+
+    return js__error(env);
+  }
 
   if (result) *result = finalizer->data;
 
@@ -1393,6 +1455,19 @@ int
 js_add_type_tag(js_env_t *env, js_value_t *object, const js_type_tag_t *tag) {
   if (JS_HasException(env->context)) return js__error(env);
 
+  int err;
+
+  js_finalizer_t *tagged = js__get_external(env, object->ref.val, "__native_type_tag");
+
+  if (tagged != NULL && tagged->finalize_cb == js__type_tag_finalize) {
+    err = js_throw_errorf(env, NULL, "Object is already type tagged");
+    assert(err == 0);
+
+    return js__error(env);
+  }
+
+  if (JS_HasException(env->context)) return js__error(env);
+
   env->depth++;
 
   JSValue external = JS_NewObjectClassUser(env->context, JS_CLASS_EXTERNAL);
@@ -1463,13 +1538,13 @@ js_check_type_tag(js_env_t *env, js_value_t *object, const js_type_tag_t *tag, b
     return js__error(env);
   }
 
-  if (!JS_IsObject(env->context, external)) {
-    *result = false;
+  *result = false;
 
-    return 0;
-  }
+  if (JS_GetClassID(env->context, external) != JS_CLASS_EXTERNAL) return 0;
 
   js_finalizer_t *finalizer = JS_GetOpaque(env->context, external);
+
+  if (finalizer == NULL || finalizer->finalize_cb != js__type_tag_finalize) return 0;
 
   js_type_tag_t *existing = finalizer->data;
 
@@ -1560,9 +1635,26 @@ js_create_bigint_words(js_env_t *env, int sign, const uint64_t *words, size_t le
   return js__error(env);
 }
 
+static inline int
+js__check_string_length(js_env_t *env, size_t len) {
+  int err;
+
+  if (len == (size_t) -1 || len <= 0x3fffffff) return 0;
+
+  err = js_throw_range_error(env, NULL, "Invalid string length");
+  assert(err == 0);
+
+  return js__error(env);
+}
+
 int
 js_create_string_utf8(js_env_t *env, const utf8_t *str, size_t len, js_value_t **result) {
   if (JS_HasException(env->context)) return js__error(env);
+
+  int err;
+
+  err = js__check_string_length(env, len);
+  if (err < 0) return err;
 
   JSValue value;
 
@@ -1594,6 +1686,11 @@ js_create_string_utf8(js_env_t *env, const utf8_t *str, size_t len, js_value_t *
 int
 js_create_string_utf16le(js_env_t *env, const utf16_t *str, size_t len, js_value_t **result) {
   if (JS_HasException(env->context)) return js__error(env);
+
+  int err;
+
+  err = js__check_string_length(env, len);
+  if (err < 0) return err;
 
   if (len == (size_t) -1) len = wcslen((wchar_t *) str);
 
@@ -1629,6 +1726,11 @@ js_create_string_utf16le(js_env_t *env, const utf16_t *str, size_t len, js_value
 int
 js_create_string_latin1(js_env_t *env, const latin1_t *str, size_t len, js_value_t **result) {
   if (JS_HasException(env->context)) return js__error(env);
+
+  int err;
+
+  err = js__check_string_length(env, len);
+  if (err < 0) return err;
 
   if (len == (size_t) -1) len = strlen((char *) str);
 
@@ -1907,6 +2009,25 @@ js_compile_function(js_env_t *env, const char *name, size_t name_len, const char
     return js__error(env);
   }
 
+  JSValue length = JS_GetPropertyStr(env->context, function, "length");
+
+  double arity;
+
+  JS_ToNumber(env->context, &arity, length);
+
+  // An argument name that is not an identifier can still parse as part of the
+  // argument list, an empty name and one smuggling several arguments among
+  // them, and the engine takes those without a word. Either way the function
+  // ends up with a different arity than it was asked for.
+  if (arity != (double) args_len) {
+    int err;
+
+    err = js_throw_errorf(env, NULL, "Could not compile function");
+    assert(err == 0);
+
+    return js__error(env);
+  }
+
   js_value_t *wrapper = js__create_handle(env, env->scope);
 
   wrapper->ref.val = function;
@@ -1944,6 +2065,16 @@ js_create_typed_function(js_env_t *env, const char *name, size_t len, js_functio
 }
 
 int
+js_on_function_dynamic_import(js_env_t *env, js_value_t *function, js_dynamic_import_cb cb, void *data) {
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
+
+  return js__error(env);
+}
+
+int
 js_get_function_id(js_env_t *env, js_value_t *function, js_value_t **result) {
   int err;
 
@@ -1973,6 +2104,23 @@ js_create_array_with_length(js_env_t *env, size_t len, js_value_t **result) {
   js_value_t *wrapper = js__create_handle(env, env->scope);
 
   wrapper->ref.val = JS_NewArray(env->context, len);
+
+  *result = wrapper;
+
+  return 0;
+}
+
+int
+js_create_array_with_elements(js_env_t *env, js_value_t *const elements[], size_t element_count, js_value_t **result) {
+  // Allow continuing even with a pending exception
+
+  js_value_t *wrapper = js__create_handle(env, env->scope);
+
+  wrapper->ref.val = JS_NewArray(env->context, element_count);
+
+  for (size_t i = 0; i < element_count; i++) {
+    JS_SetPropertyUint32(env->context, wrapper->ref.val, i, elements[i]->ref.val);
+  }
 
   *result = wrapper;
 
@@ -2709,9 +2857,7 @@ js_is_wrapped(js_env_t *env, js_value_t *value, bool *result) {
   JSGCRef saved;
   js__save_exception(env, &saved);
 
-  JSValue external = JS_GetPropertyStr(env->context, value->ref.val, "__native_external");
-
-  *result = JS_IsObject(env->context, external);
+  *result = js__get_external(env, value->ref.val, "__native_external") != NULL;
 
   js__restore_exception(env, &saved);
 
@@ -3019,6 +3165,59 @@ js_is_module_namespace(js_env_t *env, js_value_t *value, bool *result) {
 }
 
 int
+js_get_object_type(js_env_t *env, js_value_t *value, js_object_type_t *result) {
+  // Allow continuing even with a pending exception
+
+  int err;
+
+  bool is;
+
+  // Classify by way of the individual predicates, in the order of precedence
+  // documented for `js_object_type_t`, so that the two cannot drift apart. The
+  // saving is in classifying with a single call, not in the predicates
+  // themselves, which are all cheap.
+#define V(type, predicate) \
+  err = predicate(env, value, &is); \
+  assert(err == 0); \
+  if (is) { \
+    *result = type; \
+    return 0; \
+  }
+
+  V(js_array, js_is_array)
+  V(js_arguments, js_is_arguments)
+  V(js_date, js_is_date)
+  V(js_regexp, js_is_regexp)
+  V(js_error, js_is_error)
+  V(js_promise, js_is_promise)
+  V(js_proxy, js_is_proxy)
+  V(js_generator, js_is_generator)
+  V(js_map, js_is_map)
+  V(js_set, js_is_set)
+  V(js_map_iterator, js_is_map_iterator)
+  V(js_set_iterator, js_is_set_iterator)
+  V(js_weak_map, js_is_weak_map)
+  V(js_weak_set, js_is_weak_set)
+  V(js_weak_ref, js_is_weak_ref)
+  V(js_arraybuffer, js_is_arraybuffer)
+  V(js_sharedarraybuffer, js_is_sharedarraybuffer)
+  V(js_typedarray, js_is_typedarray)
+  V(js_dataview, js_is_dataview)
+  V(js_module_namespace, js_is_module_namespace)
+  V(js_boolean_object, js_is_boolean_object)
+  V(js_number_object, js_is_number_object)
+  V(js_string_object, js_is_string_object)
+  V(js_symbol_object, js_is_symbol_object)
+  V(js_bigint_object, js_is_bigint_object)
+  V((js_object_type_t) js_external, js_is_external)
+#undef V
+
+  *result = (js_object_type_t) js_object;
+
+  return 0;
+}
+
+int
 js_strict_equals(js_env_t *env, js_value_t *a, js_value_t *b, bool *result) {
   // Allow continuing even with a pending exception
 
@@ -3111,7 +3310,16 @@ int
 js_get_value_int64(js_env_t *env, js_value_t *value, int64_t *result) {
   // Allow continuing even with a pending exception
 
-  JS_ToInt64(env->context, result, value->ref.val);
+  double number;
+
+  JS_ToNumber(env->context, &number, value->ref.val);
+
+  // The conversion offered by the engine wraps around the range rather than
+  // clamping to it, so the number is narrowed here instead.
+  if (!isfinite(number)) *result = 0;
+  else if (number <= (double) INT64_MIN) *result = INT64_MIN;
+  else if (number >= (double) INT64_MAX) *result = INT64_MAX;
+  else *result = (int64_t) number;
 
   return 0;
 }
@@ -3305,7 +3513,7 @@ js_get_array_elements(js_env_t *env, js_value_t *array, js_value_t **elements, s
 }
 
 int
-js_set_array_elements(js_env_t *env, js_value_t *array, const js_value_t *elements[], size_t len, size_t offset) {
+js_set_array_elements(js_env_t *env, js_value_t *array, js_value_t *const elements[], size_t len, size_t offset) {
   if (JS_HasException(env->context)) return js__error(env);
 
   env->depth++;
