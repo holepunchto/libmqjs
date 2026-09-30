@@ -300,35 +300,18 @@ js__uncaught_exception(js_env_t *env, JSValue error) {
 }
 
 static void
-js__on_prepare(uv_prepare_t *handle);
-
-static inline void
-js__on_check_liveness(js_env_t *env) {
-  int err;
-
-  if (true /* macrotask queue empty */) {
-    err = uv_prepare_stop(&env->prepare);
-  } else {
-    err = uv_prepare_start(&env->prepare, js__on_prepare);
-  }
-
-  assert(err == 0);
-}
-
-static void
 js__on_prepare(uv_prepare_t *handle) {
-  js_env_t *env = (js_env_t *) handle->data;
-
-  js__on_check_liveness(env);
+  // Nothing is queued on the loop's behalf, so there is nothing to run before
+  // it blocks.
 }
 
 static void
 js__on_check(uv_check_t *handle) {
-  js_env_t *env = (js_env_t *) handle->data;
-
-  if (uv_loop_alive(env->loop)) return;
-
-  js__on_check_liveness(env);
+  // Nothing is queued on the loop's behalf, so there is nothing to settle once
+  // it has polled. Were a macrotask queue ever added, its liveness would have
+  // to be held as work is queued rather than settled from here: the loop runs
+  // timers after the check phase, so what their callbacks queue cannot be
+  // observed from a check callback.
 }
 
 static void
@@ -444,6 +427,10 @@ js_create_env(uv_loop_t *loop, js_platform_t *platform, const js_env_options_t *
 
   env->prepare.data = (void *) env;
 
+  // Neither handle should keep the loop alive; there is nothing queued on the
+  // loop's behalf for them to hold it open for.
+  uv_unref((uv_handle_t *) &env->prepare);
+
   err = uv_check_init(loop, &env->check);
   assert(err == 0);
 
@@ -452,9 +439,6 @@ js_create_env(uv_loop_t *loop, js_platform_t *platform, const js_env_options_t *
 
   env->check.data = (void *) env;
 
-  // The check handle should not on its own keep the loop alive; it's simply
-  // used for running any outstanding tasks that might cause additional work
-  // to be queued.
   uv_unref((uv_handle_t *) &env->check);
 
   err = uv_async_init(loop, &env->teardown, js__on_teardown);
@@ -1031,7 +1015,7 @@ js__set_weak_reference(js_env_t *env, js_ref_t *reference) {
     finalizer->finalize_cb = js__finalizer_list_finalize;
     finalizer->finalize_hint = NULL;
 
-    JSValue external = JS_NewObjectClassUser(env->context, JS_CLASS_EXTERNAL);
+    JSValue external = JS_NewObjectClassUser(env->context, JS_CLASS_EXTERNAL, 0);
 
     JS_SetOpaque(env->context, external, finalizer);
 
@@ -1198,7 +1182,7 @@ js_wrap(js_env_t *env, js_value_t *object, void *data, js_finalize_cb finalize_c
 
   env->depth++;
 
-  JSValue external = JS_NewObjectClassUser(env->context, JS_CLASS_EXTERNAL);
+  JSValue external = JS_NewObjectClassUser(env->context, JS_CLASS_EXTERNAL, 0);
 
   if (JS_IsException(external)) {
     env->depth--;
@@ -1402,7 +1386,7 @@ js_add_finalizer(js_env_t *env, js_value_t *object, void *data, js_finalize_cb f
     finalizer->finalize_cb = js__finalizer_list_finalize;
     finalizer->finalize_hint = NULL;
 
-    JSValue external = JS_NewObjectClassUser(env->context, JS_CLASS_EXTERNAL);
+    JSValue external = JS_NewObjectClassUser(env->context, JS_CLASS_EXTERNAL, 0);
 
     if (JS_IsException(external)) {
       env->depth--;
@@ -1470,7 +1454,7 @@ js_add_type_tag(js_env_t *env, js_value_t *object, const js_type_tag_t *tag) {
 
   env->depth++;
 
-  JSValue external = JS_NewObjectClassUser(env->context, JS_CLASS_EXTERNAL);
+  JSValue external = JS_NewObjectClassUser(env->context, JS_CLASS_EXTERNAL, 0);
 
   if (JS_IsException(external)) {
     env->depth--;
@@ -1876,7 +1860,9 @@ js_native_function_call(JSContext *context, JSValue *receiver, int argc, JSValue
 
   js_env_t *env = JS_GetContextOpaque(context);
 
-  js_callback_t *callback = JS_GetOpaque(context, data);
+  js_finalizer_t *finalizer = JS_GetOpaque(context, data);
+
+  js_callback_t *callback = finalizer->data;
 
   js_callback_info_t callback_info = {
     .callback = callback,
@@ -1906,6 +1892,11 @@ js_native_function_call(JSContext *context, JSValue *receiver, int argc, JSValue
   return value;
 }
 
+static void
+js__callback_finalize(js_env_t *env, void *data, void *finalize_hint) {
+  free(data);
+}
+
 int
 js_create_function(js_env_t *env, const char *name, size_t len, js_function_cb cb, void *data, js_value_t **result) {
   if (JS_HasException(env->context)) return js__error(env);
@@ -1915,9 +1906,15 @@ js_create_function(js_env_t *env, const char *name, size_t len, js_function_cb c
   callback->cb = cb;
   callback->data = data;
 
-  JSValue external = JS_NewObjectClassUser(env->context, JS_CLASS_EXTERNAL);
+  js_finalizer_t *finalizer = malloc(sizeof(js_finalizer_t));
 
-  JS_SetOpaque(env->context, external, callback);
+  finalizer->data = callback;
+  finalizer->finalize_cb = js__callback_finalize;
+  finalizer->finalize_hint = NULL;
+
+  JSValue external = JS_NewObjectClassUser(env->context, JS_CLASS_EXTERNAL, 0);
+
+  JS_SetOpaque(env->context, external, finalizer);
 
   js_value_t *wrapper = js__create_handle(env, env->scope);
 
@@ -2129,7 +2126,7 @@ js_create_array_with_elements(js_env_t *env, js_value_t *const elements[], size_
 
 static JSValue
 js_external_constructor(JSContext *context, JSValue *receiver, int argc, JSValue *argv) {
-  return JS_NewObjectClassUser(context, JS_CLASS_EXTERNAL);
+  return JS_NewObjectClassUser(context, JS_CLASS_EXTERNAL, 0);
 }
 
 static void
@@ -2157,7 +2154,7 @@ js_create_external(js_env_t *env, void *data, js_finalize_cb finalize_cb, void *
   finalizer->finalize_cb = finalize_cb;
   finalizer->finalize_hint = finalize_hint;
 
-  JSValue external = JS_NewObjectClassUser(env->context, JS_CLASS_EXTERNAL);
+  JSValue external = JS_NewObjectClassUser(env->context, JS_CLASS_EXTERNAL, 0);
 
   JS_SetOpaque(env->context, external, finalizer);
 

@@ -10,7 +10,6 @@ fetch_package(
   SOURCE_DIR mqjs
   PATCHES
     patches/001-is-object.patch
-    patches/002-sweep-finalize-swallowed-blocks.patch
     patches/003-is-strict-equal.patch
     patches/004-to-int64.patch
     patches/005-catch-shadow.patch
