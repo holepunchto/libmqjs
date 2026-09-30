@@ -1015,7 +1015,7 @@ js__set_weak_reference(js_env_t *env, js_ref_t *reference) {
     finalizer->finalize_cb = js__finalizer_list_finalize;
     finalizer->finalize_hint = NULL;
 
-    JSValue external = JS_NewObjectClassUser(env->context, JS_CLASS_EXTERNAL);
+    JSValue external = JS_NewObjectClassUser(env->context, JS_CLASS_EXTERNAL, 0);
 
     JS_SetOpaque(env->context, external, finalizer);
 
@@ -1182,7 +1182,7 @@ js_wrap(js_env_t *env, js_value_t *object, void *data, js_finalize_cb finalize_c
 
   env->depth++;
 
-  JSValue external = JS_NewObjectClassUser(env->context, JS_CLASS_EXTERNAL);
+  JSValue external = JS_NewObjectClassUser(env->context, JS_CLASS_EXTERNAL, 0);
 
   if (JS_IsException(external)) {
     env->depth--;
@@ -1386,7 +1386,7 @@ js_add_finalizer(js_env_t *env, js_value_t *object, void *data, js_finalize_cb f
     finalizer->finalize_cb = js__finalizer_list_finalize;
     finalizer->finalize_hint = NULL;
 
-    JSValue external = JS_NewObjectClassUser(env->context, JS_CLASS_EXTERNAL);
+    JSValue external = JS_NewObjectClassUser(env->context, JS_CLASS_EXTERNAL, 0);
 
     if (JS_IsException(external)) {
       env->depth--;
@@ -1454,7 +1454,7 @@ js_add_type_tag(js_env_t *env, js_value_t *object, const js_type_tag_t *tag) {
 
   env->depth++;
 
-  JSValue external = JS_NewObjectClassUser(env->context, JS_CLASS_EXTERNAL);
+  JSValue external = JS_NewObjectClassUser(env->context, JS_CLASS_EXTERNAL, 0);
 
   if (JS_IsException(external)) {
     env->depth--;
@@ -1912,7 +1912,7 @@ js_create_function(js_env_t *env, const char *name, size_t len, js_function_cb c
   finalizer->finalize_cb = js__callback_finalize;
   finalizer->finalize_hint = NULL;
 
-  JSValue external = JS_NewObjectClassUser(env->context, JS_CLASS_EXTERNAL);
+  JSValue external = JS_NewObjectClassUser(env->context, JS_CLASS_EXTERNAL, 0);
 
   JS_SetOpaque(env->context, external, finalizer);
 
@@ -2126,7 +2126,7 @@ js_create_array_with_elements(js_env_t *env, js_value_t *const elements[], size_
 
 static JSValue
 js_external_constructor(JSContext *context, JSValue *receiver, int argc, JSValue *argv) {
-  return JS_NewObjectClassUser(context, JS_CLASS_EXTERNAL);
+  return JS_NewObjectClassUser(context, JS_CLASS_EXTERNAL, 0);
 }
 
 static void
@@ -2154,7 +2154,7 @@ js_create_external(js_env_t *env, void *data, js_finalize_cb finalize_cb, void *
   finalizer->finalize_cb = finalize_cb;
   finalizer->finalize_hint = finalize_hint;
 
-  JSValue external = JS_NewObjectClassUser(env->context, JS_CLASS_EXTERNAL);
+  JSValue external = JS_NewObjectClassUser(env->context, JS_CLASS_EXTERNAL, 0);
 
   JS_SetOpaque(env->context, external, finalizer);
 
