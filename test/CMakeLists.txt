@@ -37,6 +37,8 @@ list(APPEND tests
   create-arraybuffer
   create-arraybuffer-too-large
   create-arraybuffer-with-backing-store
+  create-arraybuffer-with-backing-store-across-envs
+  create-arraybuffer-with-backing-store-across-envs-script
   create-bigint-int64
   create-bigint-words
   create-dataview
@@ -511,6 +513,8 @@ list(APPEND skipped_tests
 
   # Not implemented
   create-arraybuffer-with-backing-store
+  create-arraybuffer-with-backing-store-across-envs
+  create-arraybuffer-with-backing-store-across-envs-script
   create-external-arraybuffer-with-finalizer
   create-external-arraybuffer-with-finalizer-detach
   is-detached-arraybuffer
