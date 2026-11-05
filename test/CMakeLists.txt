@@ -34,6 +34,7 @@ list(APPEND tests
   compile-function-with-code-cache
   compile-function-with-code-cache-rejected
   create-array-with-elements
+  create-array-with-length
   create-arraybuffer
   create-arraybuffer-too-large
   create-arraybuffer-with-backing-store
@@ -63,7 +64,9 @@ list(APPEND tests
   create-external-arraybuffer
   create-external-arraybuffer-with-finalizer
   create-external-arraybuffer-with-finalizer-detach
+  create-external-arraybuffer-with-finalizer-null
   create-external-sharedarraybuffer
+  create-external-sharedarraybuffer-with-finalizer-null
   create-external-string-latin1
   create-external-string-latin1-with-finalizer
   create-external-string-utf8
@@ -131,6 +134,7 @@ list(APPEND tests
   create-typed-function-with-int64
   create-typed-function-with-number
   create-typed-function-with-pointer
+  create-typed-function-with-pointer-return
   create-typed-function-with-receiver
   create-typed-function-with-string-latin1
   create-typed-function-with-string-utf16le
@@ -155,6 +159,7 @@ list(APPEND tests
   dynamic-import-module-handler
   dynamic-import-script-handler
   dynamic-import-throw
+  dynamic-import-with-attributes
   dynamic-import-with-promise
   dynamic-import-with-referrer
   dynamic-import-with-referrer-function
@@ -179,6 +184,7 @@ list(APPEND tests
   get-module-name
   get-module-namespace-uninstantiated
   get-new-target
+  get-object-global
   get-object-type
   get-object-type-arguments
   get-object-type-array
@@ -236,6 +242,8 @@ list(APPEND tests
   inspector-multiple-debugger-enable
   inspector-pause
   instantiate-module-evaluating
+  instantiate-module-throw-then-instantiate-other
+  instantiate-module-throw-then-retry
   is-arguments
   is-array
   is-arraybuffer
@@ -304,6 +312,7 @@ list(APPEND tests
   run-module-in-context
   run-module-nested-import
   run-module-relative-import
+  run-module-synthetic-after-delete-other
   run-module-throw
   run-module-throw-then-clear
   run-module-uninstantiated
@@ -380,6 +389,7 @@ list(APPEND skipped_tests
   create-typed-function-with-int64
   create-typed-function-with-number
   create-typed-function-with-pointer
+  create-typed-function-with-pointer-return
   create-typed-function-with-receiver
   create-typed-function-with-string-latin1
   create-typed-function-with-string-utf16le
@@ -407,6 +417,8 @@ list(APPEND skipped_tests
   import-meta
   import-meta-throw
   instantiate-module-evaluating
+  instantiate-module-throw-then-instantiate-other
+  instantiate-module-throw-then-retry
   is-module-namespace
   run-module
   run-module-async
@@ -416,6 +428,7 @@ list(APPEND skipped_tests
   run-module-in-context
   run-module-nested-import
   run-module-relative-import
+  run-module-synthetic-after-delete-other
   run-module-throw
   run-module-throw-then-clear
   run-module-uninstantiated
@@ -427,6 +440,7 @@ list(APPEND skipped_tests
   dynamic-import-module-handler
   dynamic-import-script-handler
   dynamic-import-throw
+  dynamic-import-with-attributes
   dynamic-import-with-promise
   dynamic-import-with-referrer
   dynamic-import-with-referrer-function
@@ -459,6 +473,7 @@ list(APPEND skipped_tests
 
   # Not supported
   create-external-sharedarraybuffer
+  create-external-sharedarraybuffer-with-finalizer-null
   create-sharedarraybuffer
   create-sharedarraybuffer-with-backing-store
   create-sharedarraybuffer-with-backing-store-across-envs
@@ -516,6 +531,7 @@ list(APPEND skipped_tests
   create-arraybuffer-with-backing-store-across-envs
   create-arraybuffer-with-backing-store-across-envs-script
   create-external-arraybuffer-with-finalizer
+  create-external-arraybuffer-with-finalizer-null
   create-external-arraybuffer-with-finalizer-detach
   is-detached-arraybuffer
 
@@ -589,6 +605,9 @@ list(APPEND skipped_tests
   garbage-collection-tracking
   get-heap-statistics
   get-new-target
+
+  # Not supported
+  get-object-global
 )
 
 foreach(test IN LISTS tests)
