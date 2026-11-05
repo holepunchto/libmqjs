@@ -1955,7 +1955,7 @@ js_compile_function(js_env_t *env, const char *name, size_t name_len, const char
   str = JS_ToCString(env->context, source->ref.val, &str_buf);
   buf_len += strlen(str);
 
-  buf_len += strlen("})\n");
+  buf_len += strlen("\n})");
 
   char *buf = malloc(buf_len + 1 /* NULL */);
 
@@ -1982,7 +1982,7 @@ js_compile_function(js_env_t *env, const char *name, size_t name_len, const char
   str = JS_ToCString(env->context, source->ref.val, &str_buf);
   strcat(buf, str);
 
-  strcat(buf, "})\n");
+  strcat(buf, "\n})");
 
   if (file == NULL) file = "";
 
@@ -3234,6 +3234,11 @@ js_get_global(js_env_t *env, js_value_t **result) {
   *result = wrapper;
 
   return 0;
+}
+
+int
+js_get_object_global(js_env_t *env, js_value_t *object, js_value_t **result) {
+  return js_get_null(env, result);
 }
 
 int
