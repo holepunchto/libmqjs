@@ -4,8 +4,12 @@ list(APPEND tests
   add-teardown-callback
   add-teardown-callback-deferred
   add-teardown-callback-deferred-remove
+  add-teardown-callback-deferred-twice
+  add-teardown-callback-drained
   add-teardown-callback-multiple
   add-teardown-callback-remove
+  add-teardown-callback-remove-twice
+  add-teardown-callback-twice
   add-type-tag
   add-type-tag-delegate
   add-type-tag-twice
@@ -18,6 +22,7 @@ list(APPEND tests
   call-function-microtask
   call-function-microtask-nested
   call-function-throw
+  call-function-throw-in-task
   call-function-with-checkpoint
   call-threadsafe-function-after-release
   call-threadsafe-function-with-data
@@ -25,6 +30,8 @@ list(APPEND tests
   check-type-tag-not-tagged
   coerce-number-to-string
   coerce-object-to-string
+  coerce-object-to-string-call-function-throw
+  coerce-object-to-string-microtask
   coerce-string-to-number
   coerce-symbol-to-string
   coerce-to-boolean
@@ -60,6 +67,7 @@ list(APPEND tests
   create-env-multiple-concurrent
   create-env-multiple-isolated
   create-env-multiple-microtask
+  create-env-multiple-nested
   create-external
   create-external-arraybuffer
   create-external-arraybuffer-with-finalizer
@@ -73,6 +81,8 @@ list(APPEND tests
   create-external-string-utf8-with-finalizer
   create-external-string-utf16le
   create-external-string-utf16le-with-finalizer
+  create-external-string-with-finalizer-collected
+  create-external-string-with-finalizer-internalized
   create-external-with-finalizer
   create-external-with-finalizer-destroy-env
   create-function
@@ -124,8 +134,11 @@ list(APPEND tests
   create-threadsafe-function-with-finalizer
   create-typed-errors
   create-typed-function
+  create-typed-function-call-throw
   create-typed-function-multiple
   create-typed-function-no-jit
+  create-typed-function-throw
+  create-typed-function-throw-nested
   create-typed-function-with-arraybuffer
   create-typed-function-with-bigint64
   create-typed-function-with-biguint64
@@ -171,6 +184,7 @@ list(APPEND tests
   dynamic-import-without-handler
   escapable-handle-scope
   fatal-exception
+  fatal-exception-without-handler
   freeze
   garbage-collection-tracking
   get-array-elements
@@ -234,18 +248,22 @@ list(APPEND tests
   get-value-string-utf8-length
   get-value-string-utf8-no-null
   get-value-string-utf8-truncate
+  handle-scope-nested
   has-element
   has-own-property
   has-property
   import-meta
   import-meta-throw
-  inspector
-  inspector-attach-context
-  inspector-multiple-debugger-enable
-  inspector-pause
   instantiate-module-evaluating
   instantiate-module-throw-then-instantiate-other
   instantiate-module-throw-then-retry
+  inspector
+  inspector-attach-context
+  inspector-evaluate-call-function-throw
+  inspector-multiple-debugger-enable
+  inspector-pause
+  inspector-profile-idle
+  inspector-response-throw
   is-arguments
   is-array
   is-arraybuffer
@@ -255,6 +273,8 @@ list(APPEND tests
   is-boolean-object
   is-dataview
   is-date
+  is-detachable-arraybuffer
+  is-detachable-arraybuffer-wasm-memory
   is-detached-arraybuffer
   is-error
   is-external
@@ -303,11 +323,18 @@ list(APPEND tests
   promise-rejection-unhandled
   promise-rejection-unhandled-reentrant
   promise-rejection-unhandled-reentrant-deferred
+  promise-rejection-unhandled-throw
+  promise-rejection-unhandled-throw-destroy-env
+  promise-rejection-unhandled-throw-nested
   queue-microtask
   queue-microtask-with-callback
+  queue-microtask-with-callback-terminate
+  queue-microtask-with-callback-throw
+  queue-microtask-with-callback-throw-without-handler
   reference-ref-unref-leaves-object-unchanged
   reference-unref
   reference-unref-with-finalizer
+  resolve-deferred-thenable-call-function-throw
   run-module
   run-module-async
   run-module-cyclic-import
@@ -336,7 +363,10 @@ list(APPEND tests
   threads
   threads-platform-loop
   throw-error
+  throw-error-code-setter
   throw-error-formatted
+  throw-error-then-resolve-deferred
+  throw-error-with-pending-finalizers
   throw-range-error
   throw-reference-error
   throw-syntax-error
@@ -382,7 +412,10 @@ list(APPEND skipped_tests
 
   # Not supported
   create-typed-function
+  create-typed-function-call-throw
   create-typed-function-multiple
+  create-typed-function-throw
+  create-typed-function-throw-nested
   create-typed-function-with-arraybuffer
   create-typed-function-with-bigint64
   create-typed-function-with-biguint64
@@ -404,8 +437,11 @@ list(APPEND skipped_tests
   # Not supported
   inspector
   inspector-attach-context
+  inspector-evaluate-call-function-throw
   inspector-multiple-debugger-enable
   inspector-pause
+  inspector-profile-idle
+  inspector-response-throw
 
   # Not supported
   get-error-location
@@ -454,6 +490,7 @@ list(APPEND skipped_tests
   dynamic-import-without-handler
 
   # Not supported
+  is-detachable-arraybuffer-wasm-memory
   wasm
   wasm-async
   wasm-async-io
@@ -462,6 +499,7 @@ list(APPEND skipped_tests
   # Not supported
   call-function-microtask
   call-function-microtask-nested
+  coerce-object-to-string-microtask
   create-env-multiple-microtask
   create-promise-reject
   create-promise-resolve
@@ -472,8 +510,16 @@ list(APPEND skipped_tests
   promise-rejection-unhandled
   promise-rejection-unhandled-reentrant
   promise-rejection-unhandled-reentrant-deferred
+  promise-rejection-unhandled-throw
+  promise-rejection-unhandled-throw-destroy-env
+  promise-rejection-unhandled-throw-nested
   queue-microtask
   queue-microtask-with-callback
+  queue-microtask-with-callback-terminate
+  queue-microtask-with-callback-throw
+  queue-microtask-with-callback-throw-without-handler
+  resolve-deferred-thenable-call-function-throw
+  throw-error-then-resolve-deferred
 
   # Not supported
   create-external-sharedarraybuffer
@@ -485,6 +531,9 @@ list(APPEND skipped_tests
   get-object-type-sharedarraybuffer
   get-sharedarraybuffer-info
   is-sharedarraybuffer
+
+  # Not supported; array buffers cannot be detached
+  is-detachable-arraybuffer
 
   # Not supported
   create-bigint-int64
@@ -561,6 +610,7 @@ list(APPEND skipped_tests
 
   # Not implemented
   check-type-tag-from-prototype
+  create-external-string-with-finalizer-internalized
   create-object-with-prototype
   create-object-with-properties
   define-properties
@@ -615,6 +665,13 @@ list(APPEND skipped_tests
 
   # Not supported
   get-object-global
+
+  # Garbage collection only runs once the heap is full, so the objects created
+  # by the script are never finalized while it runs.
+  throw-error-with-pending-finalizers
+
+  # Not supported; no `FinalizationRegistry`
+  call-function-throw-in-task
 )
 
 foreach(test IN LISTS tests)

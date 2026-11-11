@@ -15,6 +15,7 @@ fetch_package(
     patches/005-catch-shadow.patch
     patches/006-arraybuffer-typedarray.patch
     patches/007-float16-array.patch
+    patches/008-define-property-str.patch
 )
 
 include(ExternalProject)

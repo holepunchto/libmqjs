@@ -2202,13 +2202,17 @@ js_date_now(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv) {
 
 int
 js_create_date(js_env_t *env, double time, js_value_t **result) {
-  // Allow continuing even with a pending exception
+  if (JS_HasException(env->context)) return js__error(env);
 
   if (fabs(time) > 8.64e15) time = NAN;
 
+  JSValue date = JS_NewDate(env->context, time);
+
+  if (JS_IsException(date)) return js__error(env);
+
   js_value_t *wrapper = js__create_handle(env, env->scope);
 
-  wrapper->ref.val = JS_NewDate(env->context, time);
+  wrapper->ref.val = date;
 
   *result = wrapper;
 
@@ -2228,7 +2232,7 @@ js__create_error(js_env_t *env, int class_id, js_value_t *code, js_value_t *mess
 
   wrapper->ref.val = JS_GetException(env->context);
 
-  if (code) JS_SetPropertyStr(env->context, wrapper->ref.val, "code", code->ref.val);
+  if (code) JS_DefinePropertyValueStr(env->context, wrapper->ref.val, "code", code->ref.val);
 
   *result = wrapper;
 
@@ -2588,9 +2592,21 @@ int
 js_coerce_to_string(js_env_t *env, js_value_t *value, js_value_t **result) {
   if (JS_HasException(env->context)) return js__error(env);
 
+  env->depth++;
+
   JSValue string = JS_ToString(env->context, value->ref.val);
 
-  if (JS_IsException(string)) return js__error(env);
+  env->depth--;
+
+  if (JS_IsException(string)) {
+    if (env->depth == 0) {
+      JSValue error = JS_GetException(env->context);
+
+      js__uncaught_exception(env, error);
+    }
+
+    return js__error(env);
+  }
 
   js_value_t *wrapper = js__create_handle(env, env->scope);
 
@@ -3008,6 +3024,15 @@ js_is_arraybuffer(js_env_t *env, js_value_t *value, bool *result) {
 
 int
 js_is_detached_arraybuffer(js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  *result = false;
+
+  return 0;
+}
+
+int
+js_is_detachable_arraybuffer(js_env_t *env, js_value_t *value, bool *result) {
   // Allow continuing even with a pending exception
 
   *result = false;
@@ -4410,6 +4435,26 @@ int
 js_add_teardown_callback(js_env_t *env, js_teardown_cb callback, void *data) {
   if (JS_HasException(env->context)) return js__error(env);
 
+  int err;
+
+  if (env->destroying) {
+    err = js_throw_error(env, NULL, "Teardown queue has already drained");
+    assert(err == 0);
+
+    return js__error(env);
+  }
+
+  intrusive_list_for_each(next, &env->teardown_queue.tasks) {
+    js_teardown_task_t *task = intrusive_entry(next, js_teardown_task_t, list);
+
+    if (task->type == js_immediate_teardown && task->immediate.cb == callback && task->data == data) {
+      err = js_throw_error(env, NULL, "Teardown callback has already been registered");
+      assert(err == 0);
+
+      return js__error(env);
+    }
+  }
+
   js_teardown_task_t *task = malloc(sizeof(js_teardown_task_t));
 
   task->type = js_immediate_teardown;
@@ -4425,6 +4470,8 @@ int
 js_remove_teardown_callback(js_env_t *env, js_teardown_cb callback, void *data) {
   if (JS_HasException(env->context)) return js__error(env);
 
+  int err;
+
   if (env->destroying) return 0;
 
   intrusive_list_for_each(next, &env->teardown_queue.tasks) {
@@ -4439,12 +4486,35 @@ js_remove_teardown_callback(js_env_t *env, js_teardown_cb callback, void *data) 
     }
   }
 
-  return 0;
+  err = js_throw_error(env, NULL, "Teardown callback has not been registered");
+  assert(err == 0);
+
+  return js__error(env);
 }
 
 int
 js_add_deferred_teardown_callback(js_env_t *env, js_deferred_teardown_cb callback, void *data, js_deferred_teardown_t **result) {
   if (JS_HasException(env->context)) return js__error(env);
+
+  int err;
+
+  if (env->destroying) {
+    err = js_throw_error(env, NULL, "Teardown queue has already drained");
+    assert(err == 0);
+
+    return js__error(env);
+  }
+
+  intrusive_list_for_each(next, &env->teardown_queue.tasks) {
+    js_teardown_task_t *task = intrusive_entry(next, js_teardown_task_t, list);
+
+    if (task->type == js_deferred_teardown && task->deferred.cb == callback && task->data == data) {
+      err = js_throw_error(env, NULL, "Teardown callback has already been registered");
+      assert(err == 0);
+
+      return js__error(env);
+    }
+  }
 
   js_teardown_task_t *task = malloc(sizeof(js_teardown_task_t));
 
@@ -4522,13 +4592,33 @@ js__vformat(char **result, size_t *size, const char *message, va_list args) {
   return 0;
 }
 
-int
-js_throw_error(js_env_t *env, const char *code, const char *message) {
+static inline int
+js__throw_error(js_env_t *env, int class_id, const char *code, const char *message) {
   if (JS_HasException(env->context)) return js__error(env);
 
-  JS_ThrowError(env->context, JS_CLASS_ERROR, "%s", message);
+  JS_ThrowError(env->context, class_id, "%s", message);
+
+  if (code == NULL) return 0;
+
+  JSGCRef error;
+  JS_PushGCRef(env->context, &error);
+
+  error.val = JS_GetException(env->context);
+
+  JSValue value = JS_NewString(env->context, code);
+
+  if (!JS_IsException(value)) value = JS_DefinePropertyValueStr(env->context, error.val, "code", value);
+
+  if (!JS_IsException(value)) JS_Throw(env->context, error.val);
+
+  JS_PopGCRef(env->context, &error);
 
   return 0;
+}
+
+int
+js_throw_error(js_env_t *env, const char *code, const char *message) {
+  return js__throw_error(env, JS_CLASS_ERROR, code, message);
 }
 
 int
@@ -4567,11 +4657,7 @@ js_throw_errorf(js_env_t *env, const char *code, const char *message, ...) {
 
 int
 js_throw_type_error(js_env_t *env, const char *code, const char *message) {
-  if (JS_HasException(env->context)) return js__error(env);
-
-  JS_ThrowTypeError(env->context, "%s", message);
-
-  return 0;
+  return js__throw_error(env, JS_CLASS_TYPE_ERROR, code, message);
 }
 
 int
@@ -4610,11 +4696,7 @@ js_throw_type_errorf(js_env_t *env, const char *code, const char *message, ...) 
 
 int
 js_throw_range_error(js_env_t *env, const char *code, const char *message) {
-  if (JS_HasException(env->context)) return js__error(env);
-
-  JS_ThrowRangeError(env->context, "%s", message);
-
-  return 0;
+  return js__throw_error(env, JS_CLASS_RANGE_ERROR, code, message);
 }
 
 int
@@ -4653,11 +4735,7 @@ js_throw_range_errorf(js_env_t *env, const char *code, const char *message, ...)
 
 int
 js_throw_syntax_error(js_env_t *env, const char *code, const char *message) {
-  if (JS_HasException(env->context)) return js__error(env);
-
-  JS_ThrowSyntaxError(env->context, "%s", message);
-
-  return 0;
+  return js__throw_error(env, JS_CLASS_SYNTAX_ERROR, code, message);
 }
 
 int
@@ -4696,11 +4774,7 @@ js_throw_syntax_errorf(js_env_t *env, const char *code, const char *message, ...
 
 int
 js_throw_reference_error(js_env_t *env, const char *code, const char *message) {
-  if (JS_HasException(env->context)) return js__error(env);
-
-  JS_ThrowReferenceError(env->context, "%s", message);
-
-  return 0;
+  return js__throw_error(env, JS_CLASS_REFERENCE_ERROR, code, message);
 }
 
 int
@@ -4766,6 +4840,8 @@ js_get_and_clear_last_exception(js_env_t *env, js_value_t **result) {
 int
 js_fatal_exception(js_env_t *env, js_value_t *error) {
   // Allow continuing even with a pending exception
+
+  if (env->callbacks.uncaught_exception == NULL) return 0;
 
   js__uncaught_exception(env, error->ref.val);
 

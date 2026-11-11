@@ -1,0 +1,43 @@
+diff --git a/mquickjs.c b/mquickjs.c
+index ccfbb0c..d9e3522 100644
+--- a/mquickjs.c
++++ b/mquickjs.c
+@@ -3411,6 +3411,25 @@ JSValue JS_SetPropertyStr(JSContext *ctx, JSValue this_obj,
+     return JS_SetPropertyInternal(ctx, this_obj, prop, val, FALSE);
+ }
+ 
++JSValue JS_DefinePropertyValueStr(JSContext *ctx, JSValue this_obj,
++                                  const char *str, JSValue val)
++{
++    JSValue prop;
++    JSGCRef this_obj_ref, val_ref;
++
++    JS_PUSH_VALUE(ctx, this_obj);
++    JS_PUSH_VALUE(ctx, val);
++    prop = JS_NewString(ctx, str);
++    if (!JS_IsException(prop)) {
++        prop = JS_ToPropertyKey(ctx, prop);
++    }
++    JS_POP_VALUE(ctx, val);
++    JS_POP_VALUE(ctx, this_obj);
++    if (JS_IsException(prop))
++        return prop;
++    return JS_DefinePropertyValue(ctx, this_obj, prop, val);
++}
++
+ JSValue JS_SetPropertyUint32(JSContext *ctx, JSValue this_obj,
+                              uint32_t idx, JSValue val)
+ {
+diff --git a/mquickjs.h b/mquickjs.h
+index 03cb3a9..9c959f3 100644
+--- a/mquickjs.h
++++ b/mquickjs.h
+@@ -290,6 +290,8 @@ JSValue JS_SetPropertyStr(JSContext *ctx, JSValue this_obj,
+                           const char *str, JSValue val);
+ JSValue JS_SetPropertyUint32(JSContext *ctx, JSValue this_obj,
+                              uint32_t idx, JSValue val);
++JSValue JS_DefinePropertyValueStr(JSContext *ctx, JSValue this_obj,
++                                  const char *str, JSValue val);
+ JSValue JS_NewObjectClassUser(JSContext *ctx, int class_id, uint32_t n_values);
+ JSValue JS_NewObject(JSContext *ctx);
+ JSValue JS_NewArray(JSContext *ctx, int initial_len);
