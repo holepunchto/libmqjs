@@ -113,6 +113,8 @@ struct js_env_s {
 
   JSContext *context;
   JSGCRef bindings;
+  JSGCRef continuation;
+  js_continuation_scope_t *continuation_scope;
 
   int64_t external_memory;
 
@@ -141,6 +143,11 @@ struct js_handle_scope_page_s {
 struct js_handle_scope_s {
   js_handle_scope_t *parent;
   js_handle_scope_page_t *page;
+};
+
+struct js_continuation_scope_s {
+  js_continuation_scope_t *parent;
+  js_value_t *previous;
 };
 
 struct js_escapable_handle_scope_s {
@@ -338,6 +345,19 @@ js__on_interrupt(JSContext *context, void *opaque) {
 
 static void
 js__close_env(js_env_t *env) {
+  // The handles rooting the previous snapshots may already be closed, so scopes
+  // left open are freed without restoring them.
+  while (env->continuation_scope) {
+    js_continuation_scope_t *scope = env->continuation_scope;
+
+    env->continuation_scope = scope->parent;
+
+    free(scope);
+  }
+
+  env->continuation.val = JS_UNDEFINED;
+
+  JS_PopGCRef(env->context, &env->continuation);
   JS_PopGCRef(env->context, &env->bindings);
 
   JS_FreeContext(env->context);
@@ -404,6 +424,10 @@ js_create_env(uv_loop_t *loop, js_platform_t *platform, const js_env_options_t *
   JS_PushGCRef(env->context, &env->bindings);
 
   env->bindings.val = JS_NewObject(env->context);
+
+  JS_PushGCRef(env->context, &env->continuation);
+
+  env->continuation_scope = NULL;
 
   env->external_memory = 0;
 
@@ -2138,7 +2162,13 @@ js_external_finalizer(JSContext *context, void *opaque) {
   if (finalizer == NULL) return;
 
   if (finalizer->finalize_cb) {
+    JSValue previous = env->continuation.val;
+
+    env->continuation.val = JS_UNDEFINED;
+
     finalizer->finalize_cb(env, finalizer->data, finalizer->finalize_hint);
+
+    env->continuation.val = previous;
   }
 
   free(finalizer);
@@ -3219,6 +3249,155 @@ js_strict_equals(js_env_t *env, js_value_t *a, js_value_t *b, bool *result) {
   // Allow continuing even with a pending exception
 
   *result = JS_IsStrictEqual(env->context, a->ref.val, b->ref.val);
+
+  return 0;
+}
+
+int
+js_get_continuation_snapshot(js_env_t *env, js_value_t **result) {
+  // Allow continuing even with a pending exception
+
+  js_value_t *wrapper = js__create_handle(env, env->scope);
+
+  wrapper->ref.val = env->continuation.val;
+
+  *result = wrapper;
+
+  return 0;
+}
+
+static inline js_continuation_scope_t *
+js__open_continuation_scope(js_env_t *env, JSValue snapshot) {
+  js_continuation_scope_t *scope = malloc(sizeof(js_continuation_scope_t));
+
+  scope->parent = env->continuation_scope;
+
+  scope->previous = js__create_handle(env, env->scope);
+
+  scope->previous->ref.val = env->continuation.val;
+
+  env->continuation_scope = scope;
+  env->continuation.val = snapshot;
+
+  return scope;
+}
+
+int
+js_open_continuation_scope(js_env_t *env, js_value_t *snapshot, js_continuation_scope_t **result) {
+  // Allow continuing even with a pending exception
+
+  *result = js__open_continuation_scope(env, snapshot ? snapshot->ref.val : JS_UNDEFINED);
+
+  return 0;
+}
+
+int
+js_close_continuation_scope(js_env_t *env, js_continuation_scope_t *scope) {
+  // Allow continuing even with a pending exception
+
+  assert(scope == env->continuation_scope);
+
+  env->continuation.val = scope->previous->ref.val;
+  env->continuation_scope = scope->parent;
+
+  free(scope);
+
+  return 0;
+}
+
+// Snapshots are either undefined or arrays of the form [count, k1, v1, k2, v2, ...]
+// with exactly the length they were allocated with. Elements are only accessed
+// in bounds, which reads and writes the array storage directly without running
+// JavaScript or allocating, so none of it can disturb a pending exception.
+
+static inline uint32_t
+js__get_continuation_count(js_env_t *env, JSValue snapshot) {
+  if (JS_IsUndefined(snapshot)) return 0;
+
+  return JS_VALUE_GET_INT(JS_GetPropertyUint32(env->context, snapshot, 0));
+}
+
+static inline int64_t
+js__find_continuation_variable(js_env_t *env, JSValue snapshot, JSValue key) {
+  uint32_t count = js__get_continuation_count(env, snapshot);
+
+  for (uint32_t i = 0; i < count; i++) {
+    JSValue candidate = JS_GetPropertyUint32(env->context, snapshot, 1 + i * 2);
+
+    if (JS_IsStrictEqual(env->context, candidate, key)) return i;
+  }
+
+  return -1;
+}
+
+int
+js_get_continuation_variable(js_env_t *env, js_value_t *variable, js_value_t **result) {
+  // Allow continuing even with a pending exception
+
+  JSValue snapshot = env->continuation.val;
+
+  int64_t i = js__find_continuation_variable(env, snapshot, variable->ref.val);
+
+  js_value_t *wrapper = js__create_handle(env, env->scope);
+
+  wrapper->ref.val = i == -1 ? JS_UNDEFINED : JS_GetPropertyUint32(env->context, snapshot, 2 + i * 2);
+
+  *result = wrapper;
+
+  return 0;
+}
+
+int
+js_open_continuation_variable_scope(js_env_t *env, js_value_t *variable, js_value_t *value, js_continuation_scope_t **result) {
+  // Allow continuing even with a pending exception
+
+  JSValue snapshot = env->continuation.val;
+
+  uint32_t count = js__get_continuation_count(env, snapshot);
+
+  int64_t found = js__find_continuation_variable(env, snapshot, variable->ref.val);
+
+  bool store = !JS_IsUndefined(value->ref.val);
+
+  uint32_t next_count = count - (found == -1 ? 0 : 1) + (store ? 1 : 0);
+
+  if (next_count == 0) {
+    *result = js__open_continuation_scope(env, JS_UNDEFINED);
+
+    return 0;
+  }
+
+  JSGCRef next;
+  JS_PushGCRef(env->context, &next);
+
+  next.val = JS_NewArray(env->context, 1 + next_count * 2);
+
+  if (JS_IsException(next.val)) {
+    JS_PopGCRef(env->context, &next);
+
+    return js__error(env);
+  }
+
+  // The allocation may have moved the current snapshot.
+  snapshot = env->continuation.val;
+
+  JS_SetPropertyUint32(env->context, next.val, 0, JS_NewInt32(env->context, next_count));
+
+  uint32_t j = 1;
+
+  for (uint32_t i = 0; i < count; i++) {
+    if (i == found) continue;
+
+    JS_SetPropertyUint32(env->context, next.val, j++, JS_GetPropertyUint32(env->context, snapshot, 1 + i * 2));
+    JS_SetPropertyUint32(env->context, next.val, j++, JS_GetPropertyUint32(env->context, snapshot, 2 + i * 2));
+  }
+
+  if (store) {
+    JS_SetPropertyUint32(env->context, next.val, j++, variable->ref.val);
+    JS_SetPropertyUint32(env->context, next.val, j++, value->ref.val);
+  }
+
+  *result = js__open_continuation_scope(env, JS_PopGCRef(env->context, &next));
 
   return 0;
 }

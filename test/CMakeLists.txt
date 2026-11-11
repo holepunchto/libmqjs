@@ -1,5 +1,6 @@
 list(APPEND tests
   add-finalizer
+  add-finalizer-continuation-variable
   add-finalizer-destroy-env
   add-teardown-callback
   add-teardown-callback-deferred
@@ -33,6 +34,9 @@ list(APPEND tests
   compile-function-invalid-argument-name
   compile-function-with-code-cache
   compile-function-with-code-cache-rejected
+  continuation-snapshot-pending-exception
+  continuation-variable-pending-exception
+  continuation-variable-promise-reaction
   create-array-with-elements
   create-array-with-length
   create-arraybuffer
@@ -288,6 +292,8 @@ list(APPEND tests
   is-weak-set
   many-large-allocs
   many-small-allocs
+  open-continuation-scope
+  open-continuation-variable-scope
   prepare-script
   prepare-script-id
   prepare-script-ignore-return
@@ -301,6 +307,7 @@ list(APPEND tests
   promise-rejection
   promise-rejection-handled-reentrant-deferred
   promise-rejection-unhandled
+  promise-rejection-unhandled-continuation-variable
   promise-rejection-unhandled-reentrant
   promise-rejection-unhandled-reentrant-deferred
   queue-microtask
@@ -476,6 +483,9 @@ list(APPEND skipped_tests
   queue-microtask-with-callback
 
   # Not supported
+  continuation-variable-promise-reaction
+
+  # Not supported
   create-external-sharedarraybuffer
   create-external-sharedarraybuffer-with-finalizer-null
   create-sharedarraybuffer
@@ -504,11 +514,17 @@ list(APPEND skipped_tests
   is-dataview
 
   # Not supported
+  add-finalizer-continuation-variable
   coerce-symbol-to-string
+  continuation-snapshot-pending-exception
+  continuation-variable-pending-exception
   create-property-key
   create-reference-symbol
   get-object-type-symbol-object
   is-symbol-object
+  open-continuation-scope
+  open-continuation-variable-scope
+  promise-rejection-unhandled-continuation-variable
   symbol-for
   typeof-symbol
 
