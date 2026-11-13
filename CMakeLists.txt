@@ -56,13 +56,15 @@ add_custom_command(
   CODEGEN
 )
 
+get_property(shared GLOBAL PROPERTY TARGET_SUPPORTS_SHARED_LIBS)
+
 add_library(mqjs OBJECT)
 
 set_target_properties(
   mqjs
   PROPERTIES
   C_STANDARD 11
-  POSITION_INDEPENDENT_CODE ON
+  POSITION_INDEPENDENT_CODE ${shared}
 )
 
 target_sources(
@@ -97,7 +99,7 @@ set_target_properties(
   js
   PROPERTIES
   C_STANDARD 11
-  POSITION_INDEPENDENT_CODE ON
+  POSITION_INDEPENDENT_CODE ${shared}
 )
 
 target_sources(
@@ -120,30 +122,32 @@ target_include_directories(
     $<TARGET_PROPERTY:intrusive,INTERFACE_INCLUDE_DIRECTORIES>
 )
 
-add_library(js_shared SHARED)
+if(shared)
+  add_library(js_shared SHARED)
 
-set_target_properties(
-  js_shared
-  PROPERTIES
-  OUTPUT_NAME js
-  WINDOWS_EXPORT_ALL_SYMBOLS ON
-)
+  set_target_properties(
+    js_shared
+    PROPERTIES
+    OUTPUT_NAME js
+    WINDOWS_EXPORT_ALL_SYMBOLS ON
+  )
 
-target_include_directories(
-  js_shared
-  INTERFACE
-    $<TARGET_PROPERTY:js,INTERFACE_INCLUDE_DIRECTORIES>
-)
+  target_include_directories(
+    js_shared
+    INTERFACE
+      $<TARGET_PROPERTY:js,INTERFACE_INCLUDE_DIRECTORIES>
+  )
 
-target_link_libraries(
-  js_shared
-  PUBLIC
-    mqjs
-    uv
-    utf_shared
-  PRIVATE
-    js
-)
+  target_link_libraries(
+    js_shared
+    PUBLIC
+      mqjs
+      uv
+      utf_shared
+    PRIVATE
+      js
+  )
+endif()
 
 add_library(js_static STATIC)
 
@@ -170,7 +174,11 @@ target_link_libraries(
     js
 )
 
-install(TARGETS js_shared js_static)
+install(TARGETS js_static)
+
+if(shared)
+  install(TARGETS js_shared)
+endif()
 
 if(PROJECT_IS_TOP_LEVEL)
   enable_testing()
