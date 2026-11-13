@@ -31,6 +31,14 @@ jobs:
           - os: ubuntu-22.04
             platform: android
             arch: arm
+          - os: ubuntu-22.04
+            platform: freertos
+            arch: riscv32
+            flags: -D FREERTOS_QEMU=ON
+          - os: ubuntu-22.04
+            platform: freertos
+            arch: armv8m
+            flags: -D FREERTOS_QEMU=ON
           - os: macos-15
             platform: darwin
             arch: x64
@@ -62,10 +70,13 @@ jobs:
     name: Test / ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
     steps:
       - uses: holepunchto/actions/bare-base@v1
+      - uses: holepunchto/actions/setup-qemu@v1
+        if: ${{ matrix.platform == 'freertos' }}
       - uses: holepunchto/actions/compile-prebuilds@v1
         with:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
           flags: --debug ${{ matrix.flags }}
+          picolibc: ${{ matrix.platform == 'freertos' }}
       - run: bare-make test
         if: ${{ matrix.platform != 'android' && matrix.platform != 'ios' }}
