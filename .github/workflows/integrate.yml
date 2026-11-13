@@ -55,7 +55,7 @@ jobs:
           - os: windows-2022
             platform: win32
             arch: x64
-          - os: windows-2022
+          - os: windows-11-arm
             platform: win32
             arch: arm64
     runs-on: ${{ matrix.os }}
@@ -68,4 +68,4 @@ jobs:
           arch: ${{ matrix.arch }}
           flags: --debug ${{ matrix.flags }}
       - run: bare-make test
-        if: ${{ matrix.platform == 'linux' || matrix.platform == 'darwin' || (matrix.platform == 'win32' && matrix.arch == 'x64') }}
+        if: ${{ matrix.platform != 'android' && matrix.platform != 'ios' }}
