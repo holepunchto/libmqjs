@@ -1,9 +1,13 @@
 cmake_minimum_required(VERSION 4.0)
 
 find_package(cmake-fetch REQUIRED PATHS node_modules/cmake-fetch)
+find_package(cmake-prelude REQUIRED PATHS node_modules/cmake-prelude)
+find_package(cmake-test REQUIRED PATHS node_modules/cmake-test)
 find_package(cmake-toolchains REQUIRED PATHS node_modules/cmake-toolchains)
 
-project(js C)
+project(js LANGUAGES C VERSION 0.0.0)
+
+fetch_package("github:holepunchto/libintrusive")
 
 fetch_package(
   "github:bellard/mquickjs"
@@ -83,11 +87,6 @@ target_include_directories(
     ${mqjs}
 )
 
-add_library(js OBJECT)
-
-fetch_package("github:holepunchto/libjs" SOURCE_DIR js)
-fetch_package("github:holepunchto/libintrusive")
-
 add_custom_command(
   OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/src/atoms.h
   COMMAND ${mqjs_build} -m${mqjs_build_width} > ${CMAKE_CURRENT_SOURCE_DIR}/src/atoms.h
@@ -95,93 +94,57 @@ add_custom_command(
   CODEGEN
 )
 
-set_target_properties(
+add_library_targets(
   js
-  PROPERTIES
-  C_STANDARD 11
-  POSITION_INDEPENDENT_CODE ${shared}
-)
-
-target_sources(
-  js
-  PRIVATE
+  FEATURES
+    c_std_11
+  SOURCES
     src/js.c
     src/atoms.h
-)
-
-target_include_directories(
-  js
-  INTERFACE
-    include
-  PUBLIC
-    ${js}/include
-  PRIVATE
-    $<TARGET_PROPERTY:mqjs,INTERFACE_INCLUDE_DIRECTORIES>
-    $<TARGET_PROPERTY:uv,INTERFACE_INCLUDE_DIRECTORIES>
-    $<TARGET_PROPERTY:utf,INTERFACE_INCLUDE_DIRECTORIES>
-    $<TARGET_PROPERTY:intrusive,INTERFACE_INCLUDE_DIRECTORIES>
-)
-
-if(shared)
-  add_library(js_shared SHARED)
-
-  set_target_properties(
-    js_shared
-    PROPERTIES
-    OUTPUT_NAME js
-    WINDOWS_EXPORT_ALL_SYMBOLS ON
-  )
-
-  target_include_directories(
-    js_shared
-    INTERFACE
-      $<TARGET_PROPERTY:js,INTERFACE_INCLUDE_DIRECTORIES>
-  )
-
-  target_link_libraries(
-    js_shared
-    PUBLIC
-      mqjs
-      uv
-      utf_shared
-    PRIVATE
-      js
-  )
-endif()
-
-add_library(js_static STATIC)
-
-set_target_properties(
-  js_static
-  PROPERTIES
-  OUTPUT_NAME js
-  PREFIX lib
-)
-
-target_include_directories(
-  js_static
-  INTERFACE
-    $<TARGET_PROPERTY:js,INTERFACE_INCLUDE_DIRECTORIES>
+  LINK
+    utf::<TYPE>
+  STATIC_LINK
+    uv_a
+  SHARED_LINK
+    uv
+  EXPORT OFF
 )
 
 target_link_libraries(
-  js_static
-  PUBLIC
-    mqjs
-    uv_a
-    utf_static
+  js
   PRIVATE
-    js
+    mqjs
+    intrusive::headers
 )
 
-install(TARGETS js_static)
+target_include_directories(
+  js_headers
+  INTERFACE
+    $<TARGET_PROPERTY:uv,INTERFACE_INCLUDE_DIRECTORIES>
+)
 
-if(shared)
-  install(TARGETS js_shared)
+target_sources(
+  js_static
+  PRIVATE
+    $<TARGET_OBJECTS:mqjs>
+)
+
+if(TARGET js_shared)
+  target_sources(
+    js_shared
+    PRIVATE
+      $<TARGET_OBJECTS:mqjs>
+  )
 endif()
 
-if(PROJECT_IS_TOP_LEVEL)
-  enable_testing()
+fetch_package("github:holepunchto/libjs" SOURCE_DIR js)
 
-  add_subdirectory(test)
-endif()
+target_sources(
+  js_headers
+  INTERFACE
+    FILE_SET HEADERS
+    BASE_DIRS ${js}/include
+    FILES ${js}/include/js.h
+)
+
+add_test_subdirectory(test)
