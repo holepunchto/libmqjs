@@ -119,9 +119,13 @@ struct js_env_s {
   int64_t external_memory;
 
   atomic_bool terminated;
+  bool terminating;
   bool destroying;
+  bool closing;
 
   js_teardown_queue_t teardown_queue;
+
+  intrusive_list_t threadsafe_functions;
 
   struct {
     js_uncaught_exception_cb uncaught_exception;
@@ -215,21 +219,35 @@ struct js_threadsafe_queue_s {
   size_t capacity;
   size_t head;
   size_t tail;
-  bool closed;
-  uv_mutex_t lock;
 };
 
 struct js_threadsafe_function_s {
   JSGCRef function;
   js_env_t *env;
   uv_async_t async;
+
+  uv_mutex_t lock;
+  uv_cond_t available;
   js_threadsafe_queue_t queue;
-  atomic_int state;
-  atomic_int thread_count;
+  size_t queue_limit;
+
+  enum {
+    js_threadsafe_function_open,
+    js_threadsafe_function_closing,
+    js_threadsafe_function_closed,
+  } state;
+
+  size_t thread_count;
+
+  atomic_int dispatch_state;
+
+  bool handle_closing;
+
   void *context;
   js_finalize_cb finalize_cb;
   void *finalize_hint;
   js_threadsafe_function_cb cb;
+  intrusive_list_node_t list;
 };
 
 static const char *js__platform_identifier = "mquickjs";
@@ -288,6 +306,14 @@ static void
 js__uncaught_exception(js_env_t *env, JSValue error) {
   int err;
 
+  // Termination is not reported as an exception, so it ends once it has
+  // unwound to the outermost call.
+  if (env->terminating) {
+    env->terminating = false;
+
+    return;
+  }
+
   if (env->callbacks.uncaught_exception) {
     js_handle_scope_t *scope;
     err = js_open_handle_scope(env, &scope);
@@ -322,10 +348,13 @@ js__on_check(uv_check_t *handle) {
 }
 
 static void
-js__on_handle_close(uv_handle_t *handle) {
-  js_env_t *env = (js_env_t *) handle->data;
-
+js__release_handle(js_env_t *env) {
   if (--env->active_handles == 0) {
+    JS_PopGCRef(env->context, &env->continuation);
+    JS_PopGCRef(env->context, &env->bindings);
+
+    JS_FreeContext(env->context);
+
 #ifdef _WIN32
     VirtualFree(env->heap.data, env->heap.size, MEM_RELEASE);
 #else
@@ -336,15 +365,33 @@ js__on_handle_close(uv_handle_t *handle) {
   }
 }
 
+static void
+js__on_handle_close(uv_handle_t *handle) {
+  js__release_handle((js_env_t *) handle->data);
+}
+
 static int
 js__on_interrupt(JSContext *context, void *opaque) {
   js_env_t *env = opaque;
 
-  return atomic_exchange(&env->terminated, false);
+  if (!atomic_exchange(&env->terminated, false)) return 0;
+
+  env->terminating = true;
+
+  return 1;
 }
 
 static void
+js__threadsafe_function_close(js_threadsafe_function_t *function);
+
+static void
 js__close_env(js_env_t *env) {
+  env->closing = true;
+
+  intrusive_list_for_each(next, &env->threadsafe_functions) {
+    js__threadsafe_function_close(intrusive_entry(next, js_threadsafe_function_t, list));
+  }
+
   // The handles rooting the previous snapshots may already be closed, so scopes
   // left open are freed without restoring them.
   while (env->continuation_scope) {
@@ -357,11 +404,6 @@ js__close_env(js_env_t *env) {
 
   env->continuation.val = JS_UNDEFINED;
 
-  JS_PopGCRef(env->context, &env->continuation);
-  JS_PopGCRef(env->context, &env->bindings);
-
-  JS_FreeContext(env->context);
-
   uv_close((uv_handle_t *) &env->prepare, js__on_handle_close);
   uv_close((uv_handle_t *) &env->check, js__on_handle_close);
   uv_close((uv_handle_t *) &env->teardown, js__on_handle_close);
@@ -372,6 +414,41 @@ js__on_teardown(uv_async_t *handle) {
   js_env_t *env = (js_env_t *) handle->data;
 
   if (env->refs == 0) js__close_env(env);
+}
+
+int
+js_create_external_references(js_external_references_t **result) {
+  return js_unsupported;
+}
+
+int
+js_add_external_reference(js_external_references_t *references, const void *address) {
+  return js_unsupported;
+}
+
+int
+js_get_external_references(js_external_references_t *references, const intptr_t **data, size_t *len) {
+  return js_unsupported;
+}
+
+int
+js_destroy_external_references(js_external_references_t *references) {
+  return js_unsupported;
+}
+
+int
+js_create_rebind_handlers(js_rebind_handlers_t **result) {
+  return js_unsupported;
+}
+
+int
+js_add_rebind_handler(js_rebind_handlers_t *handlers, js_rebind_cb cb, void *data) {
+  return js_unsupported;
+}
+
+int
+js_destroy_rebind_handlers(js_rebind_handlers_t *handlers) {
+  return js_unsupported;
 }
 
 int
@@ -401,10 +478,12 @@ js_create_env(uv_loop_t *loop, js_platform_t *platform, const js_env_options_t *
 
 #ifdef _WIN32
   heap.data = VirtualAlloc(NULL, heap.size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+
+  if (heap.data == NULL) return js_out_of_memory;
 #else
   heap.data = mmap(NULL, heap.size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 
-  if (heap.data == MAP_FAILED) return -1;
+  if (heap.data == MAP_FAILED) return js_out_of_memory;
 #endif
 
   js_env_t *env = malloc(sizeof(js_env_t));
@@ -433,9 +512,14 @@ js_create_env(uv_loop_t *loop, js_platform_t *platform, const js_env_options_t *
 
   atomic_init(&env->terminated, false);
 
+  env->terminating = false;
+
   env->destroying = false;
+  env->closing = false;
 
   intrusive_list_init(&env->teardown_queue.tasks);
+
+  intrusive_list_init(&env->threadsafe_functions);
 
   env->callbacks.uncaught_exception = NULL;
   env->callbacks.uncaught_exception_data = NULL;
@@ -539,6 +623,21 @@ js_get_env_platform(js_env_t *env, js_platform_t **result) {
 static inline int
 js__error(js_env_t *env) {
   return JS_HasException(env->context) ? js_pending_exception : js_uncaught_exception;
+}
+
+int
+js_create_snapshot(uv_loop_t *loop, js_platform_t *platform, const js_snapshot_options_t *options, js_env_t **result) {
+  return js_unsupported;
+}
+
+int
+js_take_snapshot(js_env_t *env, void **data, size_t *len) {
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
+
+  return js__error(env);
 }
 
 static inline void
@@ -653,21 +752,28 @@ int
 js_create_context(js_env_t *env, js_context_t **result) {
   // Allow continuing even with a pending exception
 
+  int err;
+
   js_context_t *context = malloc(sizeof(js_context_t));
 
   context->heap.size = env->heap.size;
 
 #ifdef _WIN32
   context->heap.data = VirtualAlloc(NULL, context->heap.size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+
+  if (context->heap.data == NULL) {
 #else
   context->heap.data = mmap(NULL, context->heap.size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 
   if (context->heap.data == MAP_FAILED) {
+#endif
     free(context);
 
-    return -1;
+    err = js_throw_error(env, NULL, "Out of memory");
+    assert(err == 0);
+
+    return js__error(env);
   }
-#endif
 
   context->context = JS_NewContext(context->heap.data, context->heap.size, &js_stdlib);
   context->previous = NULL;
@@ -849,6 +955,16 @@ js_get_script_id(js_env_t *env, js_script_t *script, js_value_t **result) {
 }
 
 int
+js_get_script_by_id(js_env_t *env, js_value_t *id, js_script_t **result) {
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
+
+  return js__error(env);
+}
+
+int
 js_on_script_dynamic_import(js_env_t *env, js_script_t *script, js_dynamic_import_cb cb, void *data) {
   int err;
 
@@ -917,6 +1033,16 @@ js_get_module_name(js_env_t *env, js_module_t *module, const char **result) {
 
 int
 js_get_module_id(js_env_t *env, js_module_t *module, js_value_t **result) {
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
+
+  return js__error(env);
+}
+
+int
+js_get_module_by_id(js_env_t *env, js_value_t *id, js_module_t **result) {
   int err;
 
   err = js_throw_error(env, NULL, "Unsupported operation");
@@ -4271,16 +4397,8 @@ js_new_instance(js_env_t *env, js_value_t *constructor, size_t argc, js_value_t 
   return 0;
 }
 
-static inline bool
+static inline void
 js__threadsafe_queue_push(js_threadsafe_queue_t *queue, void *data) {
-  uv_mutex_lock(&queue->lock);
-
-  if (queue->closed) {
-    uv_mutex_unlock(&queue->lock);
-
-    return false;
-  }
-
   if (queue->len == queue->capacity) {
     size_t capacity = queue->capacity ? queue->capacity << 1u : 16;
 
@@ -4298,26 +4416,17 @@ js__threadsafe_queue_push(js_threadsafe_queue_t *queue, void *data) {
 
     queue->queue = resized;
     queue->capacity = capacity;
+    queue->tail = (queue->head + queue->len) & (capacity - 1);
   }
 
   queue->queue[queue->tail] = data;
   queue->tail = (queue->tail + 1) & (queue->capacity - 1);
   queue->len++;
-
-  uv_mutex_unlock(&queue->lock);
-
-  return true;
 }
 
 static inline bool
 js__threadsafe_queue_pop(js_threadsafe_queue_t *queue, void **result) {
-  uv_mutex_lock(&queue->lock);
-
-  if (queue->len == 0) {
-    uv_mutex_unlock(&queue->lock);
-
-    return false;
-  }
+  if (queue->len == 0) return false;
 
   void *data = queue->queue[queue->head];
 
@@ -4341,31 +4450,17 @@ js__threadsafe_queue_pop(js_threadsafe_queue_t *queue, void **result) {
     queue->tail = queue->len;
   }
 
-  uv_mutex_unlock(&queue->lock);
-
   *result = data;
 
   return true;
 }
 
-static inline void
-js__threadsafe_queue_close(js_threadsafe_queue_t *queue) {
-  uv_mutex_lock(&queue->lock);
+static void
+js__threadsafe_function_destroy(js_threadsafe_function_t *function) {
+  uv_cond_destroy(&function->available);
+  uv_mutex_destroy(&function->lock);
 
-  queue->closed = true;
-
-  uv_mutex_unlock(&queue->lock);
-}
-
-static inline void
-js__threadsafe_function_finalize(js_threadsafe_function_t *function) {
-  js_env_t *env = function->env;
-
-  if (function->finalize_cb) {
-    function->finalize_cb(env, function->context, function->finalize_hint);
-  }
-
-  JS_DeleteGCRef(env->context, &function->function);
+  free(function->queue.queue);
 
   free(function);
 }
@@ -4374,11 +4469,61 @@ static void
 js__on_threadsafe_function_close(uv_handle_t *handle) {
   js_threadsafe_function_t *function = handle->data;
 
-  js__threadsafe_function_finalize(function);
+  js_env_t *env = function->env;
+
+  uv_mutex_lock(&function->lock);
+
+  js_threadsafe_queue_t queue = function->queue;
+
+  function->queue = (js_threadsafe_queue_t){};
+
+  uv_mutex_unlock(&function->lock);
+
+  if (function->cb) {
+    for (size_t i = 0; i < queue.len; i++) {
+      function->cb(NULL, NULL, function->context, queue.queue[(queue.head + i) & (queue.capacity - 1)]);
+    }
+  }
+
+  free(queue.queue);
+
+  if (function->finalize_cb) {
+    function->finalize_cb(env, function->context, function->finalize_hint);
+  }
+
+  JS_DeleteGCRef(env->context, &function->function);
+
+  intrusive_list_remove(&env->threadsafe_functions, &function->list);
+
+  uv_mutex_lock(&function->lock);
+
+  function->state = js_threadsafe_function_closed;
+
+  bool release = function->thread_count == 0;
+
+  uv_mutex_unlock(&function->lock);
+
+  if (release) js__threadsafe_function_destroy(function);
+
+  js__release_handle(env);
 }
 
-static inline void
+static void
 js__threadsafe_function_close(js_threadsafe_function_t *function) {
+  if (function->handle_closing) return;
+
+  function->handle_closing = true;
+
+  uv_mutex_lock(&function->lock);
+
+  if (function->state == js_threadsafe_function_open) {
+    function->state = js_threadsafe_function_closing;
+  }
+
+  uv_cond_broadcast(&function->available);
+
+  uv_mutex_unlock(&function->lock);
+
   uv_close((uv_handle_t *) &function->async, js__on_threadsafe_function_close);
 }
 
@@ -4388,9 +4533,19 @@ js__threadsafe_function_call(js_threadsafe_function_t *function) {
 
   js_env_t *env = function->env;
 
+  uv_mutex_lock(&function->lock);
+
   void *data;
 
-  if (js__threadsafe_queue_pop(&function->queue, &data)) {
+  bool popped = js__threadsafe_queue_pop(&function->queue, &data);
+
+  if (popped) uv_cond_signal(&function->available);
+
+  bool drained = function->queue.len == 0 && function->state != js_threadsafe_function_open;
+
+  uv_mutex_unlock(&function->lock);
+
+  if (popped) {
     js_handle_scope_t *scope;
     err = js_open_handle_scope(env, &scope);
     assert(err == 0);
@@ -4408,22 +4563,18 @@ js__threadsafe_function_call(js_threadsafe_function_t *function) {
 
     err = js_close_handle_scope(env, scope);
     assert(err == 0);
-
-    return true;
   }
 
-  if (atomic_load_explicit(&function->thread_count, memory_order_relaxed) == 0) {
-    js__threadsafe_function_close(function);
-  }
+  if (drained) js__threadsafe_function_close(function);
 
-  return false;
+  return popped;
 }
 
 static inline void
 js__threadsafe_function_signal(js_threadsafe_function_t *function) {
   int err;
 
-  int state = atomic_fetch_or_explicit(&function->state, js_threadsafe_function_pending, memory_order_acq_rel);
+  int state = atomic_fetch_or_explicit(&function->dispatch_state, js_threadsafe_function_pending, memory_order_acq_rel);
 
   if (state & js_threadsafe_function_running) {
     return;
@@ -4440,16 +4591,16 @@ js__threadsafe_function_dispatch(js_threadsafe_function_t *function) {
   int iterations = 1024;
 
   while (!done && --iterations >= 0) {
-    atomic_store_explicit(&function->state, js_threadsafe_function_running, memory_order_release);
+    atomic_store_explicit(&function->dispatch_state, js_threadsafe_function_running, memory_order_release);
 
     done = js__threadsafe_function_call(function) == false;
 
-    if (atomic_exchange_explicit(&function->state, js_threadsafe_function_idle, memory_order_acq_rel) != js_threadsafe_function_running) {
+    if (atomic_exchange_explicit(&function->dispatch_state, js_threadsafe_function_idle, memory_order_acq_rel) != js_threadsafe_function_running) {
       done = false;
     }
   }
 
-  if (!done) js__threadsafe_function_signal(function);
+  if (!done && !function->handle_closing) js__threadsafe_function_signal(function);
 }
 
 static void
@@ -4479,16 +4630,33 @@ js_create_threadsafe_function(js_env_t *env, js_value_t *function, size_t queue_
     return js__error(env);
   }
 
+  if (env->closing) {
+    err = js_throw_error(env, NULL, "Environment is being destroyed");
+    assert(err == 0);
+
+    return js__error(env);
+  }
+
   js_threadsafe_function_t *threadsafe_function = malloc(sizeof(js_threadsafe_function_t));
 
   threadsafe_function->env = env;
+  threadsafe_function->queue = (js_threadsafe_queue_t){};
+  threadsafe_function->queue_limit = queue_limit;
+  threadsafe_function->state = js_threadsafe_function_open;
+  threadsafe_function->thread_count = initial_thread_count;
+  threadsafe_function->handle_closing = false;
   threadsafe_function->context = context;
   threadsafe_function->finalize_cb = finalize_cb;
   threadsafe_function->finalize_hint = finalize_hint;
   threadsafe_function->cb = cb;
 
-  atomic_init(&threadsafe_function->state, js_threadsafe_function_idle);
-  atomic_init(&threadsafe_function->thread_count, initial_thread_count);
+  atomic_init(&threadsafe_function->dispatch_state, js_threadsafe_function_idle);
+
+  err = uv_mutex_init(&threadsafe_function->lock);
+  assert(err == 0);
+
+  err = uv_cond_init(&threadsafe_function->available);
+  assert(err == 0);
 
   JS_AddGCRef(env->context, &threadsafe_function->function);
 
@@ -4503,17 +4671,9 @@ js_create_threadsafe_function(js_env_t *env, js_value_t *function, size_t queue_
 
   threadsafe_function->async.data = threadsafe_function;
 
-  js_threadsafe_queue_t *queue = &threadsafe_function->queue;
+  env->active_handles++;
 
-  queue->queue = NULL;
-  queue->len = 0;
-  queue->capacity = 0;
-  queue->head = 0;
-  queue->tail = 0;
-  queue->closed = false;
-
-  err = uv_mutex_init(&queue->lock);
-  assert(err == 0);
+  intrusive_list_append(&env->threadsafe_functions, &threadsafe_function->list);
 
   *result = threadsafe_function;
 
@@ -4531,65 +4691,95 @@ js_get_threadsafe_function_context(js_threadsafe_function_t *function, void **re
 
 int
 js_call_threadsafe_function(js_threadsafe_function_t *function, void *data, js_threadsafe_function_call_mode_t mode) {
-  if (atomic_load_explicit(&function->thread_count, memory_order_relaxed) == 0) return -1;
+  // Allow continuing even with a pending exception
 
-  if (js__threadsafe_queue_push(&function->queue, data)) {
+  uv_mutex_lock(&function->lock);
+
+  while (function->state == js_threadsafe_function_open && function->queue_limit > 0 && function->queue.len >= function->queue_limit) {
+    if (mode == js_threadsafe_function_nonblocking) {
+      uv_mutex_unlock(&function->lock);
+
+      return js_queue_full;
+    }
+
+    uv_cond_wait(&function->available, &function->lock);
+  }
+
+  if (function->state == js_threadsafe_function_open) {
+    js__threadsafe_queue_push(&function->queue, data);
+
     js__threadsafe_function_signal(function);
+
+    uv_mutex_unlock(&function->lock);
 
     return 0;
   }
 
-  return -1;
+  if (function->thread_count == 0) {
+    uv_mutex_unlock(&function->lock);
+
+    return js_invalid_state;
+  }
+
+  function->thread_count--;
+
+  bool release = function->state == js_threadsafe_function_closed && function->thread_count == 0;
+
+  uv_mutex_unlock(&function->lock);
+
+  if (release) js__threadsafe_function_destroy(function);
+
+  return js_closing;
 }
 
 int
 js_acquire_threadsafe_function(js_threadsafe_function_t *function) {
-  int thread_count = atomic_load_explicit(&function->thread_count, memory_order_relaxed);
+  // Allow continuing even with a pending exception
 
-  while (thread_count != 0) {
-    if (
-      atomic_compare_exchange_weak_explicit(
-        &function->thread_count,
-        &thread_count,
-        thread_count + 1,
-        memory_order_acquire,
-        memory_order_relaxed
-      )
-    ) {
-      return 0;
-    }
+  uv_mutex_lock(&function->lock);
+
+  if (function->state != js_threadsafe_function_open) {
+    uv_mutex_unlock(&function->lock);
+
+    return js_closing;
   }
 
-  return -1;
+  function->thread_count++;
+
+  uv_mutex_unlock(&function->lock);
+
+  return 0;
 }
 
 int
 js_release_threadsafe_function(js_threadsafe_function_t *function, js_threadsafe_function_release_mode_t mode) {
-  int thread_count = atomic_load_explicit(&function->thread_count, memory_order_relaxed);
+  // Allow continuing even with a pending exception
 
-  bool abort = mode == js_threadsafe_function_abort;
+  uv_mutex_lock(&function->lock);
 
-  while (thread_count != 0) {
-    if (
-      atomic_compare_exchange_weak_explicit(
-        &function->thread_count,
-        &thread_count,
-        abort ? 0 : thread_count - 1,
-        memory_order_acquire,
-        memory_order_relaxed
-      )
-    ) {
-      if (abort || thread_count == 1) {
-        js__threadsafe_queue_close(&function->queue);
+  if (function->thread_count == 0) {
+    uv_mutex_unlock(&function->lock);
 
-        js__threadsafe_function_signal(function);
-      }
-
-      return 0;
-    }
+    return js_invalid_state;
   }
 
-  return -1;
+  function->thread_count--;
+
+  if ((function->thread_count == 0 || mode == js_threadsafe_function_abort) && function->state == js_threadsafe_function_open) {
+    function->state = js_threadsafe_function_closing;
+
+    uv_cond_broadcast(&function->available);
+
+    js__threadsafe_function_signal(function);
+  }
+
+  bool release = function->state == js_threadsafe_function_closed && function->thread_count == 0;
+
+  uv_mutex_unlock(&function->lock);
+
+  if (release) js__threadsafe_function_destroy(function);
+
+  return 0;
 }
 
 int
@@ -4736,7 +4926,7 @@ js_finish_deferred_teardown_callback(js_deferred_teardown_t *handle) {
     }
   }
 
-  return -1;
+  return js_invalid_state;
 }
 
 int
@@ -5004,6 +5194,8 @@ js_get_and_clear_last_exception(js_env_t *env, js_value_t **result) {
   // Allow continuing even with a pending exception
 
   JSValue error = JS_GetException(env->context);
+
+  env->terminating = false;
 
   if (JS_IsUninitialized(error)) return js_get_undefined(env, result);
 
